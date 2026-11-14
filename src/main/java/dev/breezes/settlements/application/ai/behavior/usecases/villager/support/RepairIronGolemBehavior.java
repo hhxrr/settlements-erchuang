@@ -1,0 +1,270 @@
+package dev.breezes.settlements.application.ai.behavior.usecases.villager.support;
+
+import dev.breezes.settlements.application.ai.behavior.runtime.BehaviorSupport;
+import dev.breezes.settlements.application.ai.behavior.runtime.VillagerStateMachineBehavior;
+import dev.breezes.settlements.application.ai.behavior.workflow.staged.StagedStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.BehaviorContext;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.BehaviorStateType;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.outcomes.BehaviorOutcome;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.targets.TargetState;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.targets.Targetable;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.BehaviorStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.StageKey;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.StepResult;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.TimeBasedStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.concrete.NavigateToTargetStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.concrete.StayCloseStep;
+import dev.breezes.settlements.bootstrap.registry.items.ItemRegistry;
+import dev.breezes.settlements.bootstrap.registry.particles.ParticleRegistry;
+import dev.breezes.settlements.bootstrap.registry.sounds.SoundRegistry;
+import dev.breezes.settlements.domain.ai.conditions.PerceivedEntityExistsCondition;
+import dev.breezes.settlements.domain.ai.memory.MemoryTypeRegistry;
+import dev.breezes.settlements.domain.ai.navigation.NavigationType;
+import dev.breezes.settlements.domain.ai.perception.PerceivedEntities;
+import dev.breezes.settlements.domain.ai.worldevent.WorldEventType;
+import dev.breezes.settlements.domain.animation.AnimationArchetype;
+import dev.breezes.settlements.domain.animation.RepairIronGolemAnimations;
+import dev.breezes.settlements.domain.economy.catalog.ItemMatch;
+import dev.breezes.settlements.domain.entities.Expertise;
+import dev.breezes.settlements.domain.entities.VillagerProfessionKey;
+import dev.breezes.settlements.domain.inventory.VillagerInventory;
+import dev.breezes.settlements.domain.time.ClockTicks;
+import dev.breezes.settlements.domain.world.location.Location;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import lombok.CustomLog;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.Map;
+import java.util.Optional;
+
+@CustomLog(topic = "behavior")
+public class RepairIronGolemBehavior extends VillagerStateMachineBehavior {
+
+    private static final ResourceLocation IRON_INGOT_ID = ResourceLocation.withDefaultNamespace("iron_ingot");
+    private static final double CLOSE_ENOUGH_DISTANCE = 2.0;
+    private static final float HEAL_AMOUNT = 25.0f;
+    private static final int DEFAULT_REPAIR_ATTEMPTS = 1;
+    private static final int BUFF_DURATION_TICKS = ClockTicks.minutes(20).getTicksAsInt();
+
+    /**
+     * The wait after a start that found nothing to repair.
+     * Keeps a smith whose damaged golems are all out of reach from repeating its path search back to back.
+     */
+    private static final ClockTicks NOTHING_TO_REPAIR_RETRY = ClockTicks.seconds(10);
+
+    private enum RepairStage implements StageKey {
+        REPAIR_GOLEM,
+        END;
+    }
+
+    private final RepairIronGolemConfig config;
+
+    @Nullable
+    private IronGolem targetToRepair;
+    private int remainingRepairAttempts;
+    private boolean shouldRewardExperience;
+
+    public RepairIronGolemBehavior(RepairIronGolemConfig config,
+                                   BehaviorSupport support) {
+        super(log, config.createPreconditionCheckCooldownTickable(), config.createBehaviorCooldownTickable(), support,
+                config.experienceReward());
+
+        this.config = config;
+
+        // Create behavior preconditions
+        this.preconditions.add(PerceivedEntityExistsCondition.<BaseVillager, IronGolem>builder()
+                .entityType(IronGolem.class)
+                .filter((villager, golem) -> needsRepair(golem, this.config))
+                .build());
+        this.preconditions.add(support.getDemandSignalService().requireItem(new ItemMatch.ItemRef(IRON_INGOT_ID), 1, 50, this.getClass().getSimpleName()));
+
+        // Initialize variables
+        this.targetToRepair = null;
+        this.remainingRepairAttempts = 0;
+        this.shouldRewardExperience = false;
+
+        this.initializeStateMachine(this.createControlStep(), RepairStage.END);
+    }
+
+    protected StagedStep<BaseVillager> createControlStep() {
+        return StagedStep.<BaseVillager>builder()
+                .name("RepairIronGolemBehavior")
+                .initialStage(RepairStage.REPAIR_GOLEM)
+                .stageStepMap(Map.of(RepairStage.REPAIR_GOLEM, this.createRepairStep()))
+                .nextStage(RepairStage.END)
+                .onEnd(ctx -> StepResult.noOp())
+                .build();
+    }
+
+    private BehaviorStep<BaseVillager> createRepairStep() {
+        TimeBasedStep<BaseVillager> repairTick = TimeBasedStep.<BaseVillager>builder()
+                .withTickable(ClockTicks.of(RepairIronGolemAnimations.REPAIR_DURATION_TICKS).asTickable())
+                .onStart(ctx -> {
+                    ctx.getInitiator().triggerMotion(AnimationArchetype.REPAIR_IRON_GOLEM);
+                    ctx.getInitiator().setHeldItem(ItemRegistry.HAMMER.get().getDefaultInstance());
+                    ctx.getInitiator().setOffhandItem(new ItemStack(Items.IRON_INGOT));
+                    return StepResult.noOp();
+                })
+                .addKeyFrame(ClockTicks.of(RepairIronGolemAnimations.REPAIR_PEAK_TICK), ctx -> {
+                    if (this.targetToRepair == null || !this.targetToRepair.isAlive()) {
+                        return StepResult.complete();
+                    }
+
+                    if (!ctx.getInitiator().getSettlementsInventory().consumeOrBypassed(Items.IRON_INGOT, 1)) {
+                        // Ran out of ingots mid-task — stop gracefully
+                        return StepResult.complete();
+                    }
+
+                    this.targetToRepair.heal(HEAL_AMOUNT);
+                    this.applyProfessionBuff(ctx.getInitiator());
+                    this.shouldRewardExperience = true;
+
+                    if (ctx.primaryDeed().isEmpty()) {
+                        BehaviorOutcome outcome = BehaviorOutcome.forDeed(WorldEventType.GOLEM_REPAIRED, null);
+                        outcome.markSucceeded();
+                        ctx.declarePrimaryDeed(outcome);
+                    }
+
+                    Location targetLocation = Location.fromEntity(this.targetToRepair, false);
+                    SoundRegistry.REPAIR_IRON_GOLEM.playGlobally(targetLocation, SoundSource.NEUTRAL);
+                    ParticleRegistry.repairIronGolem(targetLocation);
+
+                    if (--this.remainingRepairAttempts <= 0) {
+                        return StepResult.complete();
+                    }
+                    return StepResult.transition(RepairStage.REPAIR_GOLEM);
+                })
+                .build();
+
+        return StayCloseStep.<BaseVillager>builder()
+                .closeEnoughDistance(CLOSE_ENOUGH_DISTANCE)
+                .navigateStep(new NavigateToTargetStep<>(NavigationType.WALK, 1))
+                .actionStep(repairTick)
+                .build();
+    }
+
+    @Override
+    protected void onBehaviorStart(@Nonnull Level world,
+                                   @Nonnull BaseVillager villager,
+                                   @Nonnull BehaviorContext<BaseVillager> context) {
+        Optional<IronGolem> targetCandidate = this.findClosestReachableDamagedIronGolem(villager);
+        if (targetCandidate.isEmpty()) {
+            this.requestStopAndDelayRetry(villager, "No reachable damaged iron golem sensed");
+            return;
+        }
+
+        this.targetToRepair = targetCandidate.get();
+        Expertise expertise = villager.getMinecraftEntity().getExpertise();
+        int maxAttempts = this.config.expertiseRepairLimit().getOrDefault(expertise.getConfigName(), DEFAULT_REPAIR_ATTEMPTS);
+        VillagerInventory inventory = villager.getSettlementsInventory();
+        this.remainingRepairAttempts = inventory.requirementsBypassed()
+                ? maxAttempts
+                : Math.min(maxAttempts, inventory.count(Items.IRON_INGOT));
+        if (this.remainingRepairAttempts <= 0) {
+            this.requestStopAndDelayRetry(villager, "No iron ingots available at behavior start");
+            return;
+        }
+        this.shouldRewardExperience = false;
+        context.setState(BehaviorStateType.TARGET, TargetState.of(Targetable.fromEntity(this.targetToRepair)));
+    }
+
+    @Override
+    protected boolean preTickGuard(int delta,
+                                   @Nonnull Level world,
+                                   @Nonnull BaseVillager villager,
+                                   @Nonnull BehaviorContext<BaseVillager> context) {
+        return this.targetToRepair != null && needsRepair(this.targetToRepair, this.config);
+    }
+
+    @Override
+    protected void onBehaviorStop(@Nonnull Level world, @Nonnull BaseVillager villager) {
+        if (shouldRewardExperience) {
+            this.rewardExperience(villager);
+        }
+
+        villager.getNavigationManager().stop();
+        villager.clearHeldItem();
+        villager.clearOffhandItem();
+        villager.setMotion(AnimationArchetype.NONE);
+        this.targetToRepair = null;
+        this.remainingRepairAttempts = 0;
+        this.shouldRewardExperience = false;
+    }
+
+    /**
+     * Reward the repaired golem with a buff tied to the smith's trade, so a golem kept in service
+     * visibly benefits from its caretaker's specialty. Potency scales with the smith's expertise.
+     */
+    private void applyProfessionBuff(@Nonnull BaseVillager villager) {
+        Holder<MobEffect> effect = resolveBuffEffect(villager.getProfession());
+        if (effect == null) {
+            return;
+        }
+
+        int amplifier = resolveBuffAmplifier(villager.getMinecraftEntity().getExpertise().getLevel());
+        this.targetToRepair.addEffect(new MobEffectInstance(effect, BUFF_DURATION_TICKS, amplifier, false, true));
+    }
+
+    @Nullable
+    private static Holder<MobEffect> resolveBuffEffect(@Nonnull VillagerProfessionKey profession) {
+        // Only smithing trades repair golems
+        if (VillagerProfessionKey.ARMORER.equals(profession)) {
+            return MobEffects.DAMAGE_RESISTANCE;
+        }
+        if (VillagerProfessionKey.WEAPONSMITH.equals(profession)) {
+            return MobEffects.DAMAGE_BOOST;
+        }
+        if (VillagerProfessionKey.TOOLSMITH.equals(profession)) {
+            return MobEffects.MOVEMENT_SPEED;
+        }
+        return null;
+    }
+
+    private static int resolveBuffAmplifier(int expertiseLevel) {
+        // Novice/apprentice grant level I, journeyman/expert level II, master level III.
+        if (expertiseLevel >= Expertise.MASTER.getLevel()) {
+            return 2;
+        }
+        if (expertiseLevel >= Expertise.JOURNEYMAN.getLevel()) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private Optional<IronGolem> findClosestReachableDamagedIronGolem(@Nonnull BaseVillager villager) {
+        return this.getPerceivedEntities(villager)
+                .closest(IronGolem.class, golem -> needsRepair(golem, this.config)
+                        && villager.getNavigationManager().canReach(Location.fromEntity(golem, false), 1), villager);
+    }
+
+    private PerceivedEntities getPerceivedEntities(@Nonnull BaseVillager villager) {
+        return villager.getSettlementsBrain()
+                .getMemory(MemoryTypeRegistry.NEARBY_SENSED_ENTITIES)
+                .orElse(PerceivedEntities.empty());
+    }
+
+    private void requestStopAndDelayRetry(@Nonnull BaseVillager villager, @Nonnull String reason) {
+        villager.getSettlementsBrain().setMemory(MemoryTypeRegistry.REPAIR_IRON_GOLEM_RETRY_COOLDOWN, true,
+                NOTHING_TO_REPAIR_RETRY);
+        this.requestStop(reason);
+    }
+
+    /**
+     * Whether the golem is alive and below the configured health fraction that counts as damaged.
+     */
+    public static boolean needsRepair(@Nonnull IronGolem golem, @Nonnull RepairIronGolemConfig config) {
+        return golem.isAlive() && golem.getHealth() < golem.getMaxHealth() * config.repairHpPercentage();
+    }
+
+}

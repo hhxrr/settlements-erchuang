@@ -1,0 +1,132 @@
+{
+  "profession": "minecraft:fisherman",
+  "stock": [
+    {
+      "id": "needs_rod",
+      "match": {
+        "item": "minecraft:fishing_rod"
+      },
+      "restock": {
+        "below": 1,
+        "buyPricePerUnit": 10,
+        "priority": 80
+      }
+    },
+    {
+      "id": "needs_string",
+      "match": {
+        "item": "minecraft:string"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "cod",
+      "match": {
+        "item": "minecraft:cod"
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "salmon",
+      "match": {
+        "item": "minecraft:salmon"
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "cooked_cod",
+      "match": {
+        "item": "minecraft:cooked_cod"
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 12,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 64
+      }
+    },
+    {
+      "id": "cooked_salmon",
+      "match": {
+        "item": "minecraft:cooked_salmon"
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 12,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 64
+      }
+    },
+    {
+      "id": "pufferfish",
+      "match": {
+        "item": "minecraft:pufferfish"
+      },
+      "offer": {
+        "above": 4,
+        "basePrice": 6,
+        "priceJitter": 1,
+        "bundleSize": 4
+      },
+      "dump": {
+        "above": 32
+      }
+    },
+    {
+      "id": "tropical_fish",
+      "match": {
+        "item": "minecraft:tropical_fish"
+      },
+      "offer": {
+        "above": 4,
+        "basePrice": 6,
+        "priceJitter": 1,
+        "bundleSize": 4
+      },
+      "dump": {
+        "above": 32
+      }
+    },
+    {
+      "id": "ink_sac",
+      "match": {
+        "item": "minecraft:ink_sac"
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 64
+      }
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "profession": "minecraft:librarian",
+  "stock": [
+    {
+      "id": "buy_cane",
+      "match": {
+        "item": "minecraft:sugar_cane"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 1,
+        "priority": 50
+      }
+    },
+    {
+      "id": "buy_leather",
+      "match": {
+        "item": "minecraft:leather"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_lapis",
+      "match": {
+        "item": "minecraft:lapis_lazuli"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_feather",
+      "match": {
+        "item": "minecraft:feather"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 30
+      }
+    },
+    {
+      "id": "paper",
+      "match": {
+        "item": "minecraft:paper"
+      },
+      "offer": {
+        "above": 32,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 16
+      },
+      "dump": {
+        "above": 256
+      }
+    },
+    {
+      "id": "book",
+      "match": {
+        "item": "minecraft:book"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 3,
+        "priority": 40
+      },
+      "offer": {
+        "above": 8,
+        "basePrice": 5,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 64
+      }
+    },
+    {
+      "id": "enchanted_book",
+      "match": {
+        "item": "minecraft:enchanted_book"
+      },
+      "offer": {
+        "above": 0,
+        "basePrice": 30,
+        "priceJitter": 5,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "name_tag",
+      "match": {
+        "item": "minecraft:name_tag"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "bookshelf",
+      "match": {
+        "item": "minecraft:bookshelf"
+      },
+      "offer": {
+        "above": 4,
+        "basePrice": 8,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 64
+      }
+    }
+  ]
+}

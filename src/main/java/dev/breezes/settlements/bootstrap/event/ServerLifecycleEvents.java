@@ -1,0 +1,147 @@
+package dev.breezes.settlements.bootstrap.event;
+
+import dev.breezes.settlements.application.ai.dialogue.DialogueMode;
+import dev.breezes.settlements.application.ai.dialogue.DialogueProviderFactory;
+import dev.breezes.settlements.application.ai.dialogue.RehearsedDialogueConfig;
+import dev.breezes.settlements.application.ai.inference.InferenceGate;
+import dev.breezes.settlements.application.ai.inference.InferenceTransport;
+import dev.breezes.settlements.di.ServerComponent;
+import dev.breezes.settlements.di.SettlementsDagger;
+import lombok.CustomLog;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+
+@EventBusSubscriber
+@CustomLog
+public final class ServerLifecycleEvents {
+
+    @SubscribeEvent
+    public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+        log.debug("Initializing server subcomponent");
+        ServerComponent serverComponent = SettlementsDagger.component().serverComponentFactory().create();
+        SettlementsDagger.initializeServer(serverComponent);
+
+        InferenceGate inferenceGate = serverComponent.inferenceGate();
+        logInferenceState(inferenceGate, serverComponent.rehearsedDialogueConfig());
+
+        log.debug("Registering events");
+        NeoForge.EVENT_BUS.register(serverComponent.playerSettlementTracker());
+        NeoForge.EVENT_BUS.register(serverComponent.settlementArrivalAnnouncer());
+        NeoForge.EVENT_BUS.register(serverComponent.generatedSettlementRecordServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.uiSyncServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.courtshipSessionReaperServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.resourceIndexRefresherServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.settlementHealthServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.settlementClaimSyncServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.settlementDirectorySyncServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.tradeSessionReaperServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.raidWaveMarkServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.villagerConversionServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.villageAnimalSpawnerServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.worldgenVillagerReplacementServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.cultivationSeedSyncServerEvents());
+        NeoForge.EVENT_BUS.register(serverComponent.villageDayTypeSyncServerEvents());
+
+        // Gossips fire even when inference is off, so the session reaper must run regardless
+        NeoForge.EVENT_BUS.register(serverComponent.gossipSessionReaperServerEvents());
+
+        // SIS/cognition graph: construct + register only when the kill-switch is on
+        if (inferenceGate.isEnabled()) {
+            NeoForge.EVENT_BUS.register(serverComponent.worldEventBusReaperServerEvents());
+            NeoForge.EVENT_BUS.register(serverComponent.eveningDialoguePackSweepServerEvents());
+            NeoForge.EVENT_BUS.register(serverComponent.planOverlayPumpServerEvents());
+            NeoForge.EVENT_BUS.register(serverComponent.personaSweepServerEvents());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        log.debug("De-registering events");
+        ServerComponent serverComponent = SettlementsDagger.serverOrNull();
+        if (serverComponent != null) {
+            boolean inferenceEnabled = serverComponent.inferenceGate().isEnabled();
+
+            serverComponent.managedExecutors().forEach(ServerLifecycleEvents::shutdownExecutor);
+
+            if (inferenceEnabled) {
+                // Cancel every in-flight inference exchange BEFORE closing the transport
+                serverComponent.planRequestService().cancelAll();
+                serverComponent.personaGenerationService().shutdown();
+                serverComponent.dialogueProvider().cancelInflightSweep();
+                closeInferenceTransport(serverComponent.inferenceTransport());
+            }
+
+            // Each handler is @ServerScope, so its accessor returns the instance registered at start
+            // An unscoped handler's accessor would build a new instance, and unregistering that would do nothing
+            NeoForge.EVENT_BUS.unregister(serverComponent.playerSettlementTracker());
+            NeoForge.EVENT_BUS.unregister(serverComponent.settlementArrivalAnnouncer());
+            NeoForge.EVENT_BUS.unregister(serverComponent.generatedSettlementRecordServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.uiSyncServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.courtshipSessionReaperServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.resourceIndexRefresherServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.settlementHealthServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.settlementClaimSyncServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.settlementDirectorySyncServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.tradeSessionReaperServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.raidWaveMarkServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.villagerConversionServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.villageAnimalSpawnerServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.worldgenVillagerReplacementServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.cultivationSeedSyncServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.villageDayTypeSyncServerEvents());
+            NeoForge.EVENT_BUS.unregister(serverComponent.gossipSessionReaperServerEvents());
+
+            if (inferenceEnabled) {
+                NeoForge.EVENT_BUS.unregister(serverComponent.worldEventBusReaperServerEvents());
+                NeoForge.EVENT_BUS.unregister(serverComponent.eveningDialoguePackSweepServerEvents());
+                NeoForge.EVENT_BUS.unregister(serverComponent.planOverlayPumpServerEvents());
+                NeoForge.EVENT_BUS.unregister(serverComponent.personaSweepServerEvents());
+            }
+        }
+
+        log.debug("Clearing server subcomponent");
+        SettlementsDagger.clearServer();
+    }
+
+    /**
+     * Logs the resolved kill-switch state and the effective dialogue mode, once per server start. The misconfigured
+     * case — opted in but no endpoint — is also surfaced as a warning because it silently behaves as OFF, which is easy
+     * to miss.
+     */
+    private static void logInferenceState(InferenceGate inferenceGate, RehearsedDialogueConfig rehearsedDialogueConfig) {
+        if (inferenceGate.isMisconfigured()) {
+            log.warn("Settlements Inference Service is enabled but no endpoint is configured — staying OFF. "
+                    + "Set endpoint_base_url in inference.toml, or set enabled=false to silence this warning.");
+        }
+        DialogueMode dialogueMode = DialogueProviderFactory.effectiveMode(rehearsedDialogueConfig, inferenceGate.isEnabled());
+        log.info("Settlements Inference Service: {}, dialogue mode: {}", inferenceGate.isEnabled() ? "ON" : "OFF",
+                dialogueMode);
+    }
+
+    private static void shutdownExecutor(ExecutorService executor) {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void closeInferenceTransport(InferenceTransport transport) {
+        try {
+            transport.close();
+        } catch (RuntimeException exception) {
+            log.error("Failed to close inference transport", exception);
+        }
+    }
+
+}

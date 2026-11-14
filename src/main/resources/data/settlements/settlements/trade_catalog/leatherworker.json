@@ -1,0 +1,185 @@
+{
+  "profession": "minecraft:leatherworker",
+  "stock": [
+    {
+      "id": "leather",
+      "match": {
+        "item": "minecraft:leather"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 2,
+        "priority": 50
+      },
+      "offer": {
+        "above": 48,
+        "basePrice": 16,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "rabbit_hide",
+      "match": {
+        "item": "minecraft:rabbit_hide"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "dyes",
+      "match": {
+        "tag": "c:dyes"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "wheat",
+      "match": {
+        "item": "minecraft:wheat"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 1,
+        "priority": 30
+      }
+    },
+    {
+      "id": "needs_shears",
+      "match": {
+        "item": "minecraft:shears"
+      },
+      "restock": {
+        "below": 1,
+        "buyPricePerUnit": 12,
+        "priority": 60
+      }
+    },
+    {
+      "id": "leather_helmet",
+      "match": {
+        "item": "minecraft:leather_helmet"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 4,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "leather_chestplate",
+      "match": {
+        "item": "minecraft:leather_chestplate"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 6,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "leather_leggings",
+      "match": {
+        "item": "minecraft:leather_leggings"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 5,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "leather_boots",
+      "match": {
+        "item": "minecraft:leather_boots"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 4,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "saddle",
+      "match": {
+        "item": "minecraft:saddle"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "buy_iron",
+      "match": {
+        "item": "minecraft:iron_ingot"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 6,
+        "priority": 30
+      }
+    },
+    {
+      "id": "item_frame",
+      "match": {
+        "item": "minecraft:item_frame"
+      },
+      "offer": {
+        "above": 4,
+        "basePrice": 4,
+        "priceJitter": 1,
+        "bundleSize": 4
+      },
+      "dump": {
+        "above": 32
+      }
+    },
+    {
+      "id": "bundle",
+      "match": {
+        "item": "minecraft:bundle"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    }
+  ]
+}

@@ -1,0 +1,234 @@
+package dev.breezes.settlements.domain.ai.memory;
+
+import dev.breezes.settlements.bootstrap.registry.memory.MemoryModuleTypeRegistry;
+import dev.breezes.settlements.domain.ai.perception.PerceivedEntities;
+import dev.breezes.settlements.domain.entities.ISettlementsVillager;
+import dev.breezes.settlements.domain.time.ClockTicks;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.AbstractArrow;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Central registry of all named memory slots.
+ * <p>
+ * Fields are declared as their concrete subtype ({@link MemoryType.VanillaMemoryType} or
+ * {@link MemoryType.DecayingSpatialMemoryType}) so that call sites which need
+ * {@code .getModuleType()} can resolve it at compile time without a cast. Passing a concrete
+ * field where the sealed supertype {@code MemoryType<T>} is expected continues to work because
+ * the subtype implements the interface.
+ * <p>
+ * Factory selection:
+ * <ul>
+ *   <li>{@code vanillaBacked} — scalar/entity/flag/list memories wired into the vanilla Brain.</li>
+ *   <li>{@code decaying} — block-resource site lists owned by {@code SettlementsMemoryStore} with
+ *       per-entry TTL decay and a bounded nearest-K source cap enforced at query time.</li>
+ * </ul>
+ */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public final class MemoryTypeRegistry {
+
+    public static final MemoryType.VanillaMemoryType<ISettlementsVillager> INTERACT_TARGET = MemoryType.vanillaBacked(
+            "interact_target", MemoryModuleTypeRegistry.INTERACT_TARGET);
+
+    public static final MemoryType.VanillaMemoryType<Boolean> PLAN_BEHAVIOR_ACTIVE = MemoryType.vanillaBacked(
+            "plan_behavior_active", MemoryModuleTypeRegistry.PLAN_BEHAVIOR_ACTIVE);
+
+    /**
+     * Nearby items that the villager wants and could pathfind to.
+     */
+    public static final MemoryType.VanillaMemoryType<List<ItemEntity>> DEMANDED_GROUND_ITEMS = MemoryType.vanillaBacked(
+            "demanded_ground_items", MemoryModuleTypeRegistry.DEMANDED_GROUND_ITEMS);
+
+    /**
+     * A perceived villager selling an item this villager wants.
+     */
+    public static final MemoryType.VanillaMemoryType<ISettlementsVillager> DEMANDED_ITEM_SELLER = MemoryType.vanillaBacked(
+            "demanded_item_seller", MemoryModuleTypeRegistry.DEMANDED_ITEM_SELLER);
+
+    /**
+     * Present while the villager waits after a trade it initiated, whatever its outcome, before initiating another.
+     * Not saved with the brain, so a reload ends the wait.
+     */
+    public static final MemoryType.VanillaMemoryType<Boolean> TRADE_INITIATE_COOLDOWN = MemoryType.vanillaBacked(
+            "trade_initiate_cooldown", MemoryModuleTypeRegistry.TRADE_INITIATE_COOLDOWN);
+
+    public static final MemoryType.VanillaMemoryType<Set<GlobalPos>> BARRIERS_TO_CLOSE = MemoryType.vanillaBacked(
+            "barriers_to_close", MemoryModuleTypeRegistry.BARRIERS_TO_CLOSE);
+
+    public static final MemoryType.VanillaMemoryType<List<UUID>> OWNED_WOLVES = MemoryType.vanillaBacked(
+            "owned_wolves", MemoryModuleTypeRegistry.OWNED_WOLVES);
+
+    // VILLAGE_CHESTS is written by VillageChestsSensor, not BlockResource, so it does not need a site cap.
+    public static final MemoryType.VanillaMemoryType<List<GlobalPos>> VILLAGE_CHESTS = MemoryType.vanillaBacked(
+            "village_chests", MemoryModuleTypeRegistry.VILLAGE_CHESTS);
+
+    // CULTIVATION_SITES is written by CultivationSiteSensor, not BlockResource, so it does not need a site cap.
+    public static final MemoryType.VanillaMemoryType<List<GlobalPos>> CULTIVATION_SITES = MemoryType.vanillaBacked(
+            "cultivation_sites", MemoryModuleTypeRegistry.CULTIVATION_SITES);
+
+    public static final MemoryType.DecayingSpatialMemoryType RIPE_MELON_SITES = MemoryType.decaying(
+            "ripe_melon_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType RIPE_PUMPKIN_SITES = MemoryType.decaying(
+            "ripe_pumpkin_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType RIPE_SWEET_BERRY_BUSH_SITES = MemoryType.decaying(
+            "ripe_sweet_berry_bush_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType RIPE_CROP_SITES = MemoryType.decaying(
+            "ripe_crop_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType NETHER_WART_FARM_SITES = MemoryType.decaying(
+            "nether_wart_farm_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType HARVESTABLE_SUGARCANE_SITES = MemoryType.decaying(
+            "harvestable_sugarcane_sites", ClockTicks.minutes(40), 32);
+
+    public static final MemoryType.DecayingSpatialMemoryType FULL_HIVE_SITES = MemoryType.decaying(
+            "full_hive_sites", ClockTicks.minutes(30), 32);
+
+    // Ore sites are remembered longer because mining targets are visited infrequently.
+    public static final MemoryType.DecayingSpatialMemoryType ORE_SITES = MemoryType.decaying(
+            "ore_sites", ClockTicks.hours(2), 32);
+
+    // Gravel and sand are sparse surface resources; a small cap avoids cluttering memory.
+    public static final MemoryType.DecayingSpatialMemoryType GRAVEL_SITES = MemoryType.decaying(
+            "gravel_sites", ClockTicks.hours(2), 6);
+
+    public static final MemoryType.DecayingSpatialMemoryType SAND_SITES = MemoryType.decaying(
+            "sand_sites", ClockTicks.hours(2), 6);
+
+    public static final MemoryType.DecayingSpatialMemoryType SCAVENGEABLE_FLORA_SITES = MemoryType.decaying(
+            "scavengeable_flora_sites", ClockTicks.minutes(40), 8);
+
+    public static final MemoryType.DecayingSpatialMemoryType ANVIL_SITES = MemoryType.decaying(
+            "anvil_sites", ClockTicks.hours(2), 4);
+
+    public static final MemoryType.DecayingSpatialMemoryType BALLISTA_SITES = MemoryType.decaying(
+            "ballista_sites", ClockTicks.hours(2), 8);
+
+    /**
+     * Ballistas the villager recently failed to take up for a fight, so that it turns to another machine or another
+     * way to fight rather than straight back to the same one.
+     */
+    public static final MemoryType.VanillaMemoryType<Set<GlobalPos>> REFUSED_BALLISTAS = MemoryType.vanillaBacked(
+            "refused_ballistas", MemoryModuleTypeRegistry.REFUSED_BALLISTAS);
+
+    /**
+     * Stuck projectiles nearby that the villager could walk to and retrieve.
+     */
+    public static final MemoryType.VanillaMemoryType<List<AbstractArrow>> RETRIEVABLE_PROJECTILES = MemoryType.vanillaBacked(
+            "retrievable_projectiles", MemoryModuleTypeRegistry.RETRIEVABLE_PROJECTILES);
+
+    public static final MemoryType.VanillaMemoryType<List<UUID>> WILLING_COURTSHIP_PARTNERS = MemoryType.vanillaBacked(
+            "willing_courtship_partners", MemoryModuleTypeRegistry.WILLING_COURTSHIP_PARTNERS);
+
+    public static final MemoryType.VanillaMemoryType<PerceivedEntities> NEARBY_SENSED_ENTITIES = MemoryType.vanillaBacked(
+            "nearby_sensed_entities", MemoryModuleTypeRegistry.NEARBY_SENSED_ENTITIES);
+
+    /**
+     * Hostiles within the villager's awareness radius, nearest first.
+     */
+    public static final MemoryType.VanillaMemoryType<PerceivedEntities> NEARBY_HOSTILES = MemoryType.vanillaBacked(
+            "nearby_hostiles", MemoryModuleTypeRegistry.NEARBY_HOSTILES);
+
+    /**
+     * Those of the nearest few NEARBY_HOSTILES the villager has line of sight to, nearest first.
+     * A sighted hostile further down that list is not included.
+     */
+    public static final MemoryType.VanillaMemoryType<PerceivedEntities> SIGHTED_HOSTILES = MemoryType.vanillaBacked(
+            "sighted_hostiles", MemoryModuleTypeRegistry.SIGHTED_HOSTILES);
+
+    /**
+     * Those of the nearest few NEARBY_HOSTILES the villager has no line of sight to, nearest first.
+     * A hostile further down that list had no sight check, so it is in neither this nor SIGHTED_HOSTILES.
+     */
+    public static final MemoryType.VanillaMemoryType<PerceivedEntities> UNSEEN_HOSTILES = MemoryType.vanillaBacked(
+            "unseen_hostiles", MemoryModuleTypeRegistry.UNSEEN_HOSTILES);
+
+    /**
+     * Vanilla's own nearest-hostile memory: the nearest of NEARBY_HOSTILES.
+     */
+    public static final MemoryType.VanillaMemoryType<LivingEntity> NEAREST_HOSTILE = MemoryType.vanillaBacked(
+            "nearest_hostile", () -> MemoryModuleType.NEAREST_HOSTILE);
+
+    /**
+     * Present while the villager takes part in no iron golem summon, after it took part in one or saw one nearby.
+     * Saved with the brain, so a reload does not cut the cooldown short.
+     */
+    public static final MemoryType.VanillaMemoryType<Boolean> GOLEM_SUMMON_COOLDOWN = MemoryType.vanillaBacked(
+            "golem_summon_cooldown", MemoryModuleTypeRegistry.GOLEM_SUMMON_COOLDOWN);
+
+    /**
+     * Present while a cartographer waits before its next raid-charting pulse. Not saved with the brain, so a reload
+     * ends the wait.
+     */
+    public static final MemoryType.VanillaMemoryType<Boolean> CHART_RAIDERS_COOLDOWN = MemoryType.vanillaBacked(
+            "chart_raiders_cooldown", MemoryModuleTypeRegistry.CHART_RAIDERS_COOLDOWN);
+
+    /**
+     * Present while a librarian waits before its next cast to bind vexes. Not saved with the brain, so a reload ends
+     * the wait.
+     */
+    public static final MemoryType.VanillaMemoryType<Boolean> BIND_VEXES_COOLDOWN = MemoryType.vanillaBacked(
+            "bind_vexes_cooldown", MemoryModuleTypeRegistry.BIND_VEXES_COOLDOWN);
+
+    /**
+     * Present while a smith waits to retry an iron golem repair that found nothing to repair. Not saved with the
+     * brain, so a reload ends the wait.
+     */
+    public static final MemoryType.VanillaMemoryType<Boolean> REPAIR_IRON_GOLEM_RETRY_COOLDOWN = MemoryType.vanillaBacked(
+            "repair_iron_golem_retry_cooldown", MemoryModuleTypeRegistry.REPAIR_IRON_GOLEM_RETRY_COOLDOWN);
+
+    /**
+     * All decaying spatial memories, in declaration order. Used by diagnostics (e.g. the
+     * {@code /stest memory} dump) and any future bulk operation over the decaying store.
+     */
+    public static List<MemoryType.DecayingSpatialMemoryType> decayingSpatialTypes() {
+        return List.of(
+                RIPE_MELON_SITES,
+                RIPE_PUMPKIN_SITES,
+                RIPE_SWEET_BERRY_BUSH_SITES,
+                RIPE_CROP_SITES,
+                NETHER_WART_FARM_SITES,
+                HARVESTABLE_SUGARCANE_SITES,
+                FULL_HIVE_SITES,
+                ORE_SITES,
+                GRAVEL_SITES,
+                SAND_SITES,
+                SCAVENGEABLE_FLORA_SITES,
+                ANVIL_SITES,
+                BALLISTA_SITES);
+    }
+
+    /**
+     * All spatial site memories whose payload is a {@code List<GlobalPos>} — the decaying
+     * block-resource sites plus the vanilla-backed {@link #CULTIVATION_SITES}. Computed
+     * once at class load since the membership is fixed; the per-villager sweep reads it hot.
+     */
+    private static final List<MemoryType<List<GlobalPos>>> SPATIAL_SITE_TYPES = buildSpatialSiteTypes();
+
+    /**
+     * All spatial site memories whose payload is a {@code List<GlobalPos>} — the decaying
+     * block-resource sites plus the vanilla-backed {@link #CULTIVATION_SITES}.
+     */
+    public static List<MemoryType<List<GlobalPos>>> spatialSiteTypes() {
+        return SPATIAL_SITE_TYPES;
+    }
+
+    private static List<MemoryType<List<GlobalPos>>> buildSpatialSiteTypes() {
+        List<MemoryType<List<GlobalPos>>> all = new ArrayList<>(decayingSpatialTypes());
+        all.add(CULTIVATION_SITES);
+        return List.copyOf(all);
+    }
+
+}

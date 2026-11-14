@@ -1,0 +1,64 @@
+# ---------- 上游原有规则 ----------
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+.run/
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+runs
+run-data
+docs/local/
+docs/message_board/
+docs/working/
+AGENTS.md
+repo
+
+# Python
+.venv/
+**/__pycache__/
+
+# Generated files
+src/generated/
+run/
+logs/
+
+# ---------- 本二创补充 ----------
+# 本地构建产物 / 反编译中间物
+.mixin.out/
+build/
+
+# 第三方 Mod jar 不在源码仓库分发（体积大且各有独立许可）
+libs/*.jar
+mods_download/
+# 通配排除所有 jar，但必须保留 gradle wrapper（否定规则须放在 *.jar 之后）
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# 交付整合包 / 实测素材（走 Release，不进 git）
+万家烟火*.zip
+实测视频/
+实测截图/
+
+# 本地密钥与临时文件
+.env
+*.token
+*.log
+.DS_Store
+Thumbs.db

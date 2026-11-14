@@ -1,0 +1,9 @@
+{
+  "biome": "minecraft:forest",
+  "resource_densities": {
+    "LUMBER": 0.7
+  },
+  "template_tags": [
+    "forest"
+  ]
+}

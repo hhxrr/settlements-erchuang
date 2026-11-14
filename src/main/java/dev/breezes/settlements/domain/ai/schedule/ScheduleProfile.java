@@ -1,0 +1,133 @@
+package dev.breezes.settlements.domain.ai.schedule;
+
+import dev.breezes.settlements.domain.entities.VillagerProfessionKey;
+import dev.breezes.settlements.domain.time.TimeOfDay;
+import lombok.Builder;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Per-profession schedule tendencies expressed as game-tick offsets within a single
+ * Minecraft day (0–24 000 ticks, where tick 0 = 06:00 AM). See {@link TimeOfDay} for
+ * named time constants.
+ */
+@Builder
+public record ScheduleProfile(
+        VillagerProfessionKey profession,
+        int defaultWakeTick,
+        int defaultSleepTick,
+        int workStartTick,
+        int workEndTick,
+        String scheduleDescription
+) {
+
+    private static final Map<VillagerProfessionKey, ScheduleProfile> DEFAULT_PROFILES = Map.ofEntries(
+            Map.entry(VillagerProfessionKey.ARMORER, standardHours(VillagerProfessionKey.ARMORER)),
+            Map.entry(VillagerProfessionKey.BUTCHER, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.BUTCHER)
+                    .defaultWakeTick(TimeOfDay.AT_05_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_06_00.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_15_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_18_30.getMinecraftTick())
+                    .scheduleDescription("Early for fresh preparation")
+                    .build()),
+            Map.entry(VillagerProfessionKey.CARTOGRAPHER, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.CARTOGRAPHER)
+                    .defaultWakeTick(TimeOfDay.AT_07_30.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_08_30.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_16_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_19_30.getMinecraftTick())
+                    .scheduleDescription("Up early to survey, out late with the stars")
+                    .build()),
+            Map.entry(VillagerProfessionKey.CLERIC, standardHours(VillagerProfessionKey.CLERIC)),
+            Map.entry(VillagerProfessionKey.FARMER, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.FARMER)
+                    .defaultWakeTick(TimeOfDay.AT_04_30.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_05_30.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_15_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_18_30.getMinecraftTick())
+                    .scheduleDescription("Early riser, finishes by afternoon")
+                    .build()),
+            Map.entry(VillagerProfessionKey.FISHERMAN, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.FISHERMAN)
+                    .defaultWakeTick(TimeOfDay.AT_04_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_05_30.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_13_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_18_00.getMinecraftTick())
+                    .scheduleDescription("Very early riser, works at dawn")
+                    .build()),
+            Map.entry(VillagerProfessionKey.FLETCHER, standardHours(VillagerProfessionKey.FLETCHER)),
+            Map.entry(VillagerProfessionKey.LEATHERWORKER, standardHours(VillagerProfessionKey.LEATHERWORKER)),
+            Map.entry(VillagerProfessionKey.LIBRARIAN, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.LIBRARIAN)
+                    .defaultWakeTick(TimeOfDay.AT_08_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_09_00.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_16_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_19_30.getMinecraftTick())
+                    .scheduleDescription("Late riser, stays up reading")
+                    .build()),
+            Map.entry(VillagerProfessionKey.MASON, standardHours(VillagerProfessionKey.MASON)),
+            Map.entry(VillagerProfessionKey.NITWIT, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.NITWIT)
+                    .defaultWakeTick(TimeOfDay.AT_09_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_10_00.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_10_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_20_30.getMinecraftTick())
+                    .scheduleDescription("Sleeps in, no work schedule")
+                    .build()),
+            Map.entry(VillagerProfessionKey.NONE, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.NONE)
+                    .defaultWakeTick(TimeOfDay.AT_07_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_08_00.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_08_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_19_00.getMinecraftTick())
+                    .scheduleDescription("Community-oriented day with broad social availability")
+                    .build()),
+            Map.entry(VillagerProfessionKey.SHEPHERD, ScheduleProfile.builder()
+                    .profession(VillagerProfessionKey.SHEPHERD)
+                    .defaultWakeTick(TimeOfDay.AT_05_00.getMinecraftTick())
+                    .workStartTick(TimeOfDay.AT_06_00.getMinecraftTick())
+                    .workEndTick(TimeOfDay.AT_13_00.getMinecraftTick())
+                    .defaultSleepTick(TimeOfDay.AT_17_30.getMinecraftTick())
+                    .scheduleDescription("Early for animal care")
+                    .build()),
+            Map.entry(VillagerProfessionKey.TOOLSMITH, standardHours(VillagerProfessionKey.TOOLSMITH)),
+            Map.entry(VillagerProfessionKey.WEAPONSMITH, standardHours(VillagerProfessionKey.WEAPONSMITH))
+    );
+
+    private static final List<ScheduleProfile> DEFAULT_PROFILE_LIST = List.copyOf(DEFAULT_PROFILES.values());
+
+    public ScheduleProfile {
+        validateTick(defaultWakeTick, "defaultWakeTick");
+        validateTick(defaultSleepTick, "defaultSleepTick");
+        validateTick(workStartTick, "workStartTick");
+        validateTick(workEndTick, "workEndTick");
+    }
+
+    public static ScheduleProfile defaultFor(VillagerProfessionKey profession) {
+        return DEFAULT_PROFILES.getOrDefault(profession, standardHours(profession));
+    }
+
+    public static List<ScheduleProfile> defaultProfiles() {
+        return DEFAULT_PROFILE_LIST;
+    }
+
+    private static ScheduleProfile standardHours(VillagerProfessionKey profession) {
+        return ScheduleProfile.builder()
+                .profession(profession)
+                .defaultWakeTick(TimeOfDay.AT_07_00.getMinecraftTick())
+                .workStartTick(TimeOfDay.AT_08_00.getMinecraftTick())
+                .workEndTick(TimeOfDay.AT_15_00.getMinecraftTick())
+                .defaultSleepTick(TimeOfDay.AT_19_00.getMinecraftTick())
+                .scheduleDescription("Standard working hours")
+                .build();
+    }
+
+    private static void validateTick(int tick, String fieldName) {
+        if (!TimeOfDay.isValidTick(tick)) {
+            throw new IllegalArgumentException(fieldName + " must be between 0 and 23999");
+        }
+    }
+
+}

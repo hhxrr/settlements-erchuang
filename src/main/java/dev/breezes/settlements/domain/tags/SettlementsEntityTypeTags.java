@@ -1,0 +1,55 @@
+package dev.breezes.settlements.domain.tags;
+
+import dev.breezes.settlements.shared.util.ResourceLocationUtil;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntityType;
+
+/**
+ * Holder for all mod-defined entity type tag keys.
+ * <p>
+ * Tag JSON files live under {@code data/settlements/tags/entity_type/}.
+ */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class SettlementsEntityTypeTags {
+
+    /**
+     * Entities that are allied to the villager.
+     */
+    public static final TagKey<EntityType<?>> VILLAGER_ALLIES = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("villager_allies"));
+
+    /**
+     * Entities a villager perceives as a threat.
+     */
+    public static final TagKey<EntityType<?>> VILLAGER_ENEMIES = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("villager_enemies"));
+
+    /**
+     * Entities that guard a village, counted toward how many golems a threatened villager will summon.
+     */
+    public static final TagKey<EntityType<?>> VILLAGE_GUARDIANS = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("village_guardians"));
+
+    /**
+     * Arrow-type projectiles a fletcher collects once they are stuck in a block.
+     */
+    public static final TagKey<EntityType<?>> RETRIEVABLE_PROJECTILES = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("retrievable_projectiles"));
+
+    /**
+     * Entities a librarian binds during a raid wave. An entity missing from VILLAGER_ENEMIES is never a target, even
+     * when it is in this tag.
+     */
+    public static final TagKey<EntityType<?>> BINDABLE = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("bindable"));
+
+    /**
+     * Entities counted as a settlement's residents when a founding observes how large it is.
+     */
+    public static final TagKey<EntityType<?>> SETTLEMENT_RESIDENTS = TagKey.create(Registries.ENTITY_TYPE,
+            ResourceLocationUtil.mod("settlement_residents"));
+
+}

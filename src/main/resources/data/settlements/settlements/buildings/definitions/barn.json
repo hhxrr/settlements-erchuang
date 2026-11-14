@@ -1,0 +1,16 @@
+{
+  "id": "settlements:building_definitions/barn",
+  "placement_priority": 45,
+  "zone_tier_min": 4,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [],
+  "forbidden_resources": [],
+  "trait_affinities": {
+    "settlements:settlement_traits/farming": 0.6
+  },
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 15,
+  "footprint_depth": 15,
+  "npc_count": 0
+}

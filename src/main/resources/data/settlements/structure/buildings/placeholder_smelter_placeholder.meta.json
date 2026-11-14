@@ -1,0 +1,13 @@
+{
+  "id": "7700f8dd-b75c-412f-aac7-9bc5373bb356",
+  "building_definition": "settlements:building_definitions/smelter",
+  "tags": [],
+  "authors": [
+    "breeze"
+  ],
+  "notes": "Generated placeholder structure metadata.",
+  "width": 11,
+  "depth": 11,
+  "height": 8,
+  "min_minecraft_version": "1.21.1"
+}

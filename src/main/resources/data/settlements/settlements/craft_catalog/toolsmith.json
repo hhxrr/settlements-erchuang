@@ -1,0 +1,50 @@
+{
+  "profession": "minecraft:toolsmith",
+  "recipes": [
+    {
+      "id": "iron_ingot_from_nuggets",
+      "inputs": [
+        { "match": { "item": "minecraft:iron_nugget" }, "count": 9 }
+      ],
+      "output": { "item": "minecraft:iron_ingot", "count": 1 }
+    },
+    {
+      "id": "shears",
+      "inputs": [
+        { "match": { "item": "minecraft:iron_ingot" }, "count": 2 }
+      ],
+      "output": { "item": "minecraft:shears", "count": 1 }
+    },
+    {
+      "id": "flint_and_steel",
+      "inputs": [
+        { "match": { "item": "minecraft:iron_ingot" }, "count": 1 },
+        { "match": { "item": "minecraft:flint" }, "count": 1 }
+      ],
+      "output": { "item": "minecraft:flint_and_steel", "count": 1 }
+    },
+    {
+      "id": "fishing_rod",
+      "inputs": [
+        { "match": { "item": "minecraft:stick" }, "count": 3 },
+        { "match": { "item": "minecraft:string" }, "count": 2 }
+      ],
+      "output": { "item": "minecraft:fishing_rod", "count": 1 }
+    },
+    {
+      "id": "bucket",
+      "inputs": [
+        { "match": { "item": "minecraft:iron_ingot" }, "count": 3 }
+      ],
+      "output": { "item": "minecraft:bucket", "count": 1 }
+    },
+    {
+      "id": "lantern",
+      "inputs": [
+        { "match": { "item": "minecraft:iron_nugget" }, "count": 4 },
+        { "match": { "item": "minecraft:coal" }, "count": 1 }
+      ],
+      "output": { "item": "minecraft:lantern", "count": 4 }
+    }
+  ]
+}

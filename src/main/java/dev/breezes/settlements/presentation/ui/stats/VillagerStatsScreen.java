@@ -1,0 +1,920 @@
+package dev.breezes.settlements.presentation.ui.stats;
+
+import dev.breezes.settlements.application.economy.demand.ActiveDemand;
+import dev.breezes.settlements.application.ui.stats.model.DemandDisplayEntry;
+import dev.breezes.settlements.application.ui.stats.model.VillagerDemandDisplaySnapshot;
+import dev.breezes.settlements.application.ui.stats.model.VillagerInventorySnapshot;
+import dev.breezes.settlements.application.ui.stats.model.VillagerStatsSnapshot;
+import dev.breezes.settlements.application.ui.stats.model.VillagerTradeCatalogSnapshot;
+import dev.breezes.settlements.domain.economy.catalog.ItemMatch;
+import dev.breezes.settlements.domain.economy.catalog.OfferEntry;
+import dev.breezes.settlements.domain.inventory.BackpackEntry;
+import dev.breezes.settlements.domain.personality.OriginType;
+import dev.breezes.settlements.infrastructure.network.features.ui.sync.UiChannel;
+import dev.breezes.settlements.infrastructure.network.features.ui.sync.packet.ServerBoundCloseUiPacket;
+import dev.breezes.settlements.infrastructure.rendering.animation.ObservationalVillagerRenderFlag;
+import dev.breezes.settlements.presentation.ui.framework.Elements;
+import dev.breezes.settlements.presentation.ui.framework.Insets;
+import dev.breezes.settlements.presentation.ui.framework.LayoutScreen;
+import dev.breezes.settlements.presentation.ui.framework.LinearLayout;
+import dev.breezes.settlements.presentation.ui.framework.ScrollableList;
+import dev.breezes.settlements.presentation.ui.framework.SizeConstraint;
+import dev.breezes.settlements.presentation.ui.framework.StackLayout;
+import dev.breezes.settlements.presentation.ui.framework.UIElement;
+import dev.breezes.settlements.presentation.ui.framework.WidgetElement;
+import dev.breezes.settlements.presentation.ui.sync.UiClientState;
+import dev.breezes.settlements.shared.annotations.functional.ClientSide;
+import lombok.CustomLog;
+import lombok.Getter;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemLore;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+@ClientSide
+@CustomLog
+public class VillagerStatsScreen extends LayoutScreen {
+
+    private static final float PANEL_WIDTH_RATIO = 0.85F;
+    private static final float PANEL_HEIGHT_RATIO = 0.80F;
+    private static final int MIN_GUI_WIDTH = 420;
+    private static final int MIN_GUI_HEIGHT = 280;
+    private static final int MAX_GUI_WIDTH = 540;
+    private static final int MAX_GUI_HEIGHT = 400;
+    private static final int PANEL_MARGIN = 10;
+    private static final int FOOTER_HEIGHT = 24;
+    private static final int ITEM_CELL_SIZE = 20;
+    private static final int LEFT_PANEL_WEIGHT = 7;
+    private static final int RIGHT_PANEL_WEIGHT = 13;
+    private static final int MAX_HEX_CHART_HEIGHT = 100;
+
+    private static final int MAX_SKETCH_LINES = 6;
+    private static final float SKETCH_TEXT_SCALE = 0.8F;
+
+    private static final String TITLE_KEY = "ui.settlements.stats.title";
+    private static final String INVENTORY_KEY = "ui.settlements.stats.inventory";
+    private static final String ACTIVITY_NONE_KEY = "ui.settlements.stats.activity.none";
+    private static final String HOME_KEY = "ui.settlements.stats.home";
+    private static final String WORK_KEY = "ui.settlements.stats.work";
+    private static final String HOME_NONE_KEY = "ui.settlements.stats.home.none";
+    private static final String WORK_NONE_KEY = "ui.settlements.stats.work.none";
+    private static final String REPUTATION_KEY = "ui.settlements.stats.reputation";
+    private static final String CONNECTION_KEY = "ui.settlements.stats.connection";
+    private static final String CONNECTION_OK_KEY = "ui.settlements.stats.connection.ok";
+    private static final String CONNECTION_DISCONNECTED_KEY = "ui.settlements.stats.connection.disconnected";
+    private static final String CONNECTION_OK_TOOLTIP_KEY = "ui.settlements.stats.connection.ok.tooltip";
+    private static final String CONNECTION_DISCONNECTED_TOOLTIP_KEY = "ui.settlements.stats.connection.disconnected.tooltip";
+    private static final String ACTIVITY_KEY = "ui.settlements.stats.activity";
+    private static final String CLOSE_KEY = "ui.settlements.stats.close";
+    private static final String UNEMPLOYED_KEY = "ui.settlements.stats.unemployed";
+    private static final String EXPERTISE_PROFESSION_KEY = "ui.settlements.stats.expertise_profession";
+    private static final String EXPERTISE_UNKNOWN_KEY = "ui.settlements.stats.expertise.unknown";
+    private static final String WALLET_KEY = "ui.settlements.stats.wallet";
+    private static final String TRADES_OFFERS_KEY = "ui.settlements.stats.trades.offers";
+    private static final String TRADES_DEMANDS_KEY = "ui.settlements.stats.trades.demands";
+    private static final String LOADING_KEY = "ui.settlements.stats.loading";
+    private static final String UNAVAILABLE_KEY = "ui.settlements.stats.unavailable";
+    private static final String DEFAULT_VILLAGER_NAME = "Villager";
+    private static final String PERSONA_TITLE_KEY = "ui.settlements.stats.persona.title";
+    private static final String PERSONA_HEADING_KEY = "ui.settlements.stats.persona.heading";
+    private static final String PERSONA_PENDING_KEY = "ui.settlements.stats.persona.pending";
+    private static final String PERSONA_ORIGIN_KEY_PREFIX = "ui.settlements.stats.persona.origin.";
+    private static final String PERSONA_SKETCH_ELLIPSIS = "...";
+
+    // Static fallback icons
+    private static final ItemStack FALLBACK_ACTIVITY_ICON = new ItemStack(Items.PAPER);
+    private static final ItemStack BED_ICON = new ItemStack(Items.RED_BED);
+    private static final ItemStack EMERALD_ICON = new ItemStack(Items.EMERALD);
+
+    @Getter
+    private final long sessionId;
+    private final UiClientState uiClientState;
+    private final ObservationalVillagerRenderFlag observationalRenderFlag;
+    private final int villagerEntityId;
+    @Nullable
+    private VillagerStatsSnapshot statsSnapshot;
+    @Nullable
+    private VillagerInventorySnapshot inventorySnapshot;
+    @Nullable
+    private VillagerTradeCatalogSnapshot tradeCatalogSnapshot;
+    @Nullable
+    private VillagerDemandDisplaySnapshot latestDemandSnapshot;
+
+    private final HexChartRenderer hexChartRenderer;
+    @Nullable
+    private ScrollableList inventoryList;
+    @Nullable
+    private ScrollableList offersList;
+    @Nullable
+    private ScrollableList demandsList;
+    private int inventoryColumns;
+    private int tradeCatalogColumns;
+
+    // Cached per-snapshot render state
+    private ItemStack cachedWorkstationIcon;
+    private ItemStack cachedActivityIcon;
+    @Nullable
+    private HpBarElement hpBarElement;
+    @Nullable
+    private HungerBarElement hungerBarElement;
+
+    // Cached components
+    private Component cachedReputationText;
+    private int cachedReputationColor;
+    private Component cachedActivityText;
+    private int cachedActivityTextColor;
+    private Component cachedHomeText;
+    private int cachedHomeTextColor;
+    private Component cachedWorkText;
+    private int cachedWorkTextColor;
+    private Component cachedWalletText;
+
+    public VillagerStatsScreen(long sessionId,
+                               @Nonnull UiClientState uiClientState,
+                               @Nonnull ObservationalVillagerRenderFlag observationalRenderFlag,
+                               int villagerEntityId) {
+        super(Component.translatable(TITLE_KEY));
+
+        this.sessionId = sessionId;
+        this.uiClientState = uiClientState;
+        this.observationalRenderFlag = observationalRenderFlag;
+        this.villagerEntityId = villagerEntityId;
+        this.statsSnapshot = null;
+        this.inventorySnapshot = null;
+        this.tradeCatalogSnapshot = null;
+        this.latestDemandSnapshot = null;
+        this.hexChartRenderer = new HexChartRenderer();
+        this.cachedWorkstationIcon = new ItemStack(Items.CRAFTING_TABLE);
+        this.cachedActivityIcon = FALLBACK_ACTIVITY_ICON;
+
+        rebuildLoadingCachedComponents();
+    }
+
+    @Override
+    protected UIElement buildRoot() {
+        int panelW = getPanelWidth();
+        int panelH = getPanelHeight();
+
+        Button closeBtn = Button.builder(Component.translatable(CLOSE_KEY), b -> onClose())
+                .bounds(0, 0, 60, 20).build();
+        addRenderableWidget(closeBtn);
+
+        UIElement panel = LinearLayout.vertical()
+                .width(SizeConstraint.fixed(panelW))
+                .height(SizeConstraint.fixed(panelH))
+                .backgroundColor(theme.panelColor())
+                .child(buildBody())
+                .child(Elements.hLine(theme.borderDark()))
+                .child(buildFooter(closeBtn))
+                .build();
+
+        return StackLayout.builder()
+                .width(SizeConstraint.fixed(panelW))
+                .height(SizeConstraint.fixed(panelH))
+                .child(panel)
+                .child(buildUnavailableOverlay())
+                .build();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        this.uiClientState.tickHeartbeatIfNeeded(this.sessionId);
+    }
+
+    @Override
+    public void removed() {
+        if (this.sessionId > 0) {
+            PacketDistributor.sendToServer(new ServerBoundCloseUiPacket(UiChannel.VILLAGER_STATS, this.sessionId));
+            this.uiClientState.clearSession(this.sessionId);
+        }
+
+        super.removed();
+    }
+
+    public void applyStatsSnapshot(@Nonnull VillagerStatsSnapshot snapshot) {
+        this.statsSnapshot = snapshot;
+        this.cachedWorkstationIcon = getWorkstationIcon(snapshot.professionKey());
+        this.cachedActivityIcon = resolveActivityIcon(snapshot.activeBehaviorIconId());
+
+        rebuildCachedComponents(snapshot);
+
+        if (this.hpBarElement != null) {
+            this.hpBarElement.setHp(snapshot.currentHealth(), snapshot.maxHealth());
+        }
+        if (this.hungerBarElement != null) {
+            this.hungerBarElement.setHunger(snapshot.hunger());
+        }
+    }
+
+    public void applyInventorySnapshot(@Nonnull VillagerInventorySnapshot inventory) {
+        this.inventorySnapshot = inventory;
+
+        if (this.inventoryList != null) {
+            this.inventoryList.rebuildRows();
+        }
+    }
+
+    public void applyTradeCatalogSnapshot(@Nonnull VillagerTradeCatalogSnapshot snapshot) {
+        this.tradeCatalogSnapshot = snapshot;
+
+        if (this.offersList != null) {
+            this.offersList.rebuildRows();
+        }
+        if (this.demandsList != null) {
+            this.demandsList.rebuildRows();
+        }
+    }
+
+    public void applyDemandSnapshot(@Nonnull VillagerDemandDisplaySnapshot snapshot) {
+        this.latestDemandSnapshot = snapshot;
+
+        if (this.demandsList != null) {
+            this.demandsList.rebuildRows();
+        }
+    }
+
+    private void rebuildCachedComponents(@Nonnull VillagerStatsSnapshot snapshot) {
+        // Reputation
+        int rep = snapshot.reputation();
+        Component titleComponent = Component.translatable(VillagerStatsUtil.getReputationTitleKey(rep));
+        this.cachedReputationText = Component.translatable(REPUTATION_KEY, titleComponent);
+        this.cachedReputationColor = getReputationColor(rep);
+
+        // Activity
+        String nameKey = snapshot.activeBehaviorNameKey();
+        if (nameKey != null) {
+            Component activityName = Component.translatable(nameKey);
+            this.cachedActivityText = Component.translatable(ACTIVITY_KEY, activityName);
+            this.cachedActivityTextColor = theme.successColor();
+        } else {
+            Component activityName = Component.translatable(ACTIVITY_NONE_KEY);
+            this.cachedActivityText = Component.translatable(ACTIVITY_KEY, activityName);
+            this.cachedActivityTextColor = theme.subtleTextColor();
+        }
+
+        // Home
+        BlockPos homePos = snapshot.homePos();
+        if (homePos != null) {
+            this.cachedHomeText = Component.translatable(HOME_KEY, homePos.getX(), homePos.getY(), homePos.getZ());
+            this.cachedHomeTextColor = theme.textColor();
+        } else {
+            this.cachedHomeText = Component.translatable(HOME_NONE_KEY);
+            this.cachedHomeTextColor = theme.subtleTextColor();
+        }
+
+        // Wallet
+        this.cachedWalletText = Component.translatable(WALLET_KEY, snapshot.walletBalance());
+
+        // Workstation
+        if (VillagerStatsUtil.isUnemployed(snapshot.professionKey())) {
+            this.cachedWorkText = Component.translatable(WORK_NONE_KEY);
+            this.cachedWorkTextColor = theme.subtleTextColor();
+        } else {
+            BlockPos workPos = snapshot.workstationPos();
+            if (workPos != null) {
+                this.cachedWorkText = Component.translatable(WORK_KEY, workPos.getX(), workPos.getY(), workPos.getZ());
+                this.cachedWorkTextColor = theme.textColor();
+            } else {
+                this.cachedWorkText = Component.translatable(WORK_NONE_KEY);
+                this.cachedWorkTextColor = theme.subtleTextColor();
+            }
+        }
+    }
+
+    private void rebuildLoadingCachedComponents() {
+        Component loading = Component.translatable(LOADING_KEY);
+        this.cachedReputationText = loading;
+        this.cachedReputationColor = theme.subtleTextColor();
+        this.cachedActivityText = loading;
+        this.cachedActivityTextColor = theme.subtleTextColor();
+        this.cachedHomeText = loading;
+        this.cachedHomeTextColor = theme.subtleTextColor();
+        this.cachedWorkText = loading;
+        this.cachedWorkTextColor = theme.subtleTextColor();
+        this.cachedWalletText = loading;
+    }
+
+    // Body
+
+    private UIElement buildBody() {
+        return LinearLayout.horizontal()
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .child(buildLeftPanel())
+                .child(Elements.rect().color(theme.borderDark())
+                        .width(SizeConstraint.fixed(1)).height(SizeConstraint.FILL).build())
+                .child(buildRightPanel())
+                .build();
+    }
+
+    // Left Panel
+
+    private UIElement buildLeftPanel() {
+        return LinearLayout.vertical()
+                .width(SizeConstraint.weighted(LEFT_PANEL_WEIGHT))
+                .height(SizeConstraint.FILL)
+                .padding(new Insets(6, 6, 6, 6))
+                .gap(3)
+                .child(Elements.centeredText(this::getVillagerNameComponent, theme.textColor()))
+                .child(Elements.centeredText(this::getExpertiseProfessionComponent, theme.subtleTextColor()))
+                .child(buildVillagerModelArea())
+                .child(buildHpBar())
+                .child(buildHungerBar())
+                .child(buildHomeRow())
+                .child(buildWorkstationRow())
+                .child(buildCurrentActivity())
+                .child(buildWalletRow())
+                .child(buildHexChart())
+                .child(buildReputation())
+                .build();
+    }
+
+    private Component getVillagerNameComponent() {
+        if (this.statsSnapshot == null) {
+            return Component.translatable(LOADING_KEY);
+        }
+        String name = this.statsSnapshot.villagerName();
+        return Component.literal(name != null ? name : DEFAULT_VILLAGER_NAME);
+    }
+
+    private Component getExpertiseProfessionComponent() {
+        if (this.statsSnapshot == null) {
+            return Component.literal("--");
+        }
+        String profKey = this.statsSnapshot.professionKey();
+        if (VillagerStatsUtil.isUnemployed(profKey)) {
+            return Component.translatable(UNEMPLOYED_KEY);
+        }
+
+        Component expertise = VillagerStatsUtil.expertiseTranslationKey(this.statsSnapshot.expertiseLevel())
+                .map(Component::translatable)
+                .orElseGet(() -> Component.translatable(EXPERTISE_UNKNOWN_KEY));
+        Component profession = Component.translatable(VillagerStatsUtil.professionTranslationKey(profKey));
+        return Component.translatable(EXPERTISE_PROFESSION_KEY, expertise, profession);
+    }
+
+    private UIElement buildVillagerModelArea() {
+        // Performance note: Entity model rendering is the most expensive element.
+        // Candidate for framebuffer caching if profiling shows issues.
+        return new VillagerModelElement(() -> this.villagerEntityId, this.observationalRenderFlag, theme);
+    }
+
+    private UIElement buildHpBar() {
+        float currentHealth = this.statsSnapshot == null ? 0.0F : this.statsSnapshot.currentHealth();
+        float maxHealth = this.statsSnapshot == null ? 1.0F : this.statsSnapshot.maxHealth();
+        this.hpBarElement = new HpBarElement(theme, currentHealth, maxHealth);
+        return this.hpBarElement;
+    }
+
+    private UIElement buildHungerBar() {
+        this.hungerBarElement = new HungerBarElement(theme, this.statsSnapshot == null ? 0 : this.statsSnapshot.hunger());
+        return this.hungerBarElement;
+    }
+
+    private UIElement buildHexChart() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.weightedMax(1, MAX_HEX_CHART_HEIGHT),
+                (graphics, bounds, mouseX, mouseY, partialTick) -> {
+                    if (this.statsSnapshot == null) {
+                        graphics.drawCenteredString(this.font, Component.translatable(LOADING_KEY),
+                                bounds.x() + bounds.width() / 2, bounds.y() + bounds.height() / 2 - 4, theme.subtleTextColor());
+                        return;
+                    }
+                    hexChartRenderer.render(graphics, bounds, mouseX, mouseY, this.font,
+                            this.statsSnapshot.geneValues(), theme);
+                });
+    }
+
+    private UIElement buildReputation() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(10), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            graphics.drawString(this.font, this.cachedReputationText, bounds.x(), bounds.y(), this.cachedReputationColor, false);
+
+            // Hover: show numeric value
+            if (this.statsSnapshot != null && bounds.contains(mouseX, mouseY)) {
+                int rep = this.statsSnapshot.reputation();
+                String sign = rep >= 0 ? "+" : "";
+                graphics.renderTooltip(this.font, Component.literal(sign + rep), mouseX, mouseY);
+            }
+        });
+    }
+
+    private UIElement buildCurrentActivity() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(18), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            graphics.renderItem(this.cachedActivityIcon, bounds.x(), bounds.y());
+            graphics.drawString(this.font, this.cachedActivityText, bounds.x() + 18, bounds.y() + 4, this.cachedActivityTextColor, false);
+        });
+    }
+
+    private UIElement buildWalletRow() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(18), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            graphics.renderItem(EMERALD_ICON, bounds.x(), bounds.y());
+            graphics.drawString(this.font, this.cachedWalletText, bounds.x() + 18, bounds.y() + 4, theme.textColor(), false);
+        });
+    }
+
+    private static ItemStack resolveActivityIcon(@Nullable String iconId) {
+        if (iconId == null) {
+            return FALLBACK_ACTIVITY_ICON;
+        }
+
+        try {
+            ResourceLocation resourceLocation = ResourceLocation.tryParse(iconId);
+            Item item = BuiltInRegistries.ITEM.get(resourceLocation);
+            if (item != Items.AIR) {
+                return item.getDefaultInstance();
+            }
+        } catch (Exception e) {
+            log.error("Failed to resolve activity item icon for {}", iconId, e);
+        }
+
+        return FALLBACK_ACTIVITY_ICON;
+    }
+
+    private UIElement buildHomeRow() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(18), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            graphics.renderItem(BED_ICON, bounds.x(), bounds.y());
+            graphics.drawString(this.font, this.cachedHomeText, bounds.x() + 18, bounds.y() + 4, this.cachedHomeTextColor, false);
+        });
+    }
+
+    private UIElement buildWorkstationRow() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(18), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            graphics.renderItem(this.cachedWorkstationIcon, bounds.x(), bounds.y());
+            graphics.drawString(this.font, this.cachedWorkText, bounds.x() + 18, bounds.y() + 4, this.cachedWorkTextColor, false);
+        });
+    }
+
+    private static final Map<String, Item> WORKSTATION_ICON_BY_PROFESSION = Map.ofEntries(
+            Map.entry("farmer", Items.COMPOSTER),
+            Map.entry("librarian", Items.LECTERN),
+            Map.entry("cleric", Items.BREWING_STAND),
+            Map.entry("armorer", Items.BLAST_FURNACE),
+            Map.entry("weaponsmith", Items.GRINDSTONE),
+            Map.entry("toolsmith", Items.SMITHING_TABLE),
+            Map.entry("butcher", Items.SMOKER),
+            Map.entry("leatherworker", Items.CAULDRON),
+            Map.entry("mason", Items.STONECUTTER),
+            Map.entry("stone_mason", Items.STONECUTTER),
+            Map.entry("shepherd", Items.LOOM),
+            Map.entry("fletcher", Items.FLETCHING_TABLE),
+            Map.entry("cartographer", Items.CARTOGRAPHY_TABLE),
+            Map.entry("fisherman", Items.BARREL)
+    );
+
+    private static ItemStack getWorkstationIcon(@Nonnull String profKey) {
+        String suffix = VillagerStatsUtil.professionKeySuffix(profKey);
+        Item item = WORKSTATION_ICON_BY_PROFESSION.getOrDefault(suffix, Items.CRAFTING_TABLE);
+        return new ItemStack(item);
+    }
+
+    // Right Panel
+
+    private UIElement buildRightPanel() {
+        return LinearLayout.vertical()
+                .width(SizeConstraint.weighted(RIGHT_PANEL_WEIGHT))
+                .height(SizeConstraint.FILL)
+                .padding(new Insets(6, 6, 6, 6))
+                .gap(4)
+                .child(buildPersonaCard())
+                .child(buildInventorySection())
+                .child(buildOffersSection())
+                .child(buildDemandsSection())
+                .build();
+    }
+
+    // Persona Card
+
+    private UIElement buildPersonaCard() {
+        return LinearLayout.vertical()
+                .width(SizeConstraint.FILL)
+                .height(SizeConstraint.WRAP)
+                .gap(2)
+                .child(Elements.text(this::getPersonaHeadingComponent, theme.subtleTextColor()))
+                .child(Elements.text(this::getPersonaAdjectivesComponent, theme.textColor()))
+                .child(buildPersonaSketchElement())
+                .build();
+    }
+
+    private Component getPersonaAdjectivesComponent() {
+        if (this.statsSnapshot == null || this.statsSnapshot.adjectives().isEmpty()) {
+            return Component.translatable(PERSONA_PENDING_KEY);
+        }
+        return Component.literal(String.join(", ", this.statsSnapshot.adjectives()));
+    }
+
+    private Component getPersonaHeadingComponent() {
+        // Falls back to the bare title while the snapshot is still loading or carries no origin
+        if (this.statsSnapshot == null || this.statsSnapshot.origin() == null) {
+            return Component.translatable(PERSONA_TITLE_KEY);
+        }
+
+        // Fold the origin into the card heading ("Character: Village-born")
+        OriginType origin = this.statsSnapshot.origin();
+        Component originPhrase = Component.translatable(PERSONA_ORIGIN_KEY_PREFIX + origin.name().toLowerCase(Locale.ROOT));
+        return Component.translatable(PERSONA_HEADING_KEY, originPhrase);
+    }
+
+    private UIElement buildPersonaSketchElement() {
+        // A fixed height (rather than measuring the wrapped line count) sidesteps a chicken-and-egg
+        // problem: the wrap width is only known once layout resolves this element's actual bounds,
+        // but layout needs a height contribution from this element before that point.
+        int scaledLineHeight = Math.round(this.font.lineHeight * SKETCH_TEXT_SCALE);
+        int sketchHeight = MAX_SKETCH_LINES * scaledLineHeight;
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.fixed(sketchHeight),
+                (graphics, bounds, mouseX, mouseY, partialTick) -> {
+                    if (this.statsSnapshot == null) {
+                        return;
+                    }
+                    String sketch = this.statsSnapshot.characterSketch();
+                    if (sketch == null || sketch.isBlank()) {
+                        return;
+                    }
+
+                    // Render the paragraph inside a scaled matrix: everything below is in the element's
+                    // local space (origin at bounds top-left), shrunk by SKETCH_TEXT_SCALE. Wrapping against
+                    // the un-scaled width lets each line hold proportionally more text before it wraps.
+                    graphics.pose().pushPose();
+                    graphics.pose().translate(bounds.x(), bounds.y(), 0);
+                    graphics.pose().scale(SKETCH_TEXT_SCALE, SKETCH_TEXT_SCALE, 1.0F);
+
+                    int wrapWidth = Math.round(bounds.width() / SKETCH_TEXT_SCALE);
+                    List<FormattedCharSequence> lines = this.font.split(Component.literal(sketch), wrapWidth);
+                    int maxLines = Math.max(1, bounds.height() / scaledLineHeight);
+                    int linesToDraw = Math.min(lines.size(), maxLines);
+                    boolean truncated = lines.size() > linesToDraw;
+
+                    for (int i = 0; i < linesToDraw; i++) {
+                        FormattedCharSequence line = lines.get(i);
+                        int y = this.font.lineHeight * i;
+                        graphics.drawString(this.font, line, 0, y, theme.subtleTextColor(), false);
+
+                        if (truncated && i == linesToDraw - 1) {
+                            int lineWidth = this.font.width(line);
+                            graphics.drawString(this.font, PERSONA_SKETCH_ELLIPSIS, lineWidth, y, theme.subtleTextColor(), false);
+                        }
+                    }
+
+                    graphics.pose().popPose();
+                });
+    }
+
+    private UIElement buildInventorySection() {
+        int availableWidth = Math.max(100, getPanelWidth() * RIGHT_PANEL_WEIGHT / (LEFT_PANEL_WEIGHT + RIGHT_PANEL_WEIGHT) - 16);
+        this.inventoryColumns = Math.max(1, availableWidth / ITEM_CELL_SIZE);
+        this.tradeCatalogColumns = this.inventoryColumns;
+
+        this.inventoryList = ScrollableList.builder()
+                .rowHeight(ITEM_CELL_SIZE)
+                .rowFactory(this::buildInventoryRows)
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .padding(Insets.NONE)
+                .alternatingRowColors(0, 0)
+                .build();
+        this.inventoryList.rebuildRows();
+
+        return LinearLayout.vertical()
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(2))
+                .gap(2)
+                .child(Elements.text(this::getInventoryHeaderComponent, theme.subtleTextColor()))
+                .child(this.inventoryList)
+                .build();
+    }
+
+    private UIElement buildOffersSection() {
+        this.offersList = ScrollableList.builder()
+                .rowHeight(ITEM_CELL_SIZE)
+                .rowFactory(this::buildOfferRows)
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .padding(Insets.NONE)
+                .alternatingRowColors(0, 0)
+                .build();
+        this.offersList.rebuildRows();
+
+        return LinearLayout.vertical()
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .gap(2)
+                .child(Elements.text(() -> Component.translatable(TRADES_OFFERS_KEY), theme.subtleTextColor()))
+                .child(this.offersList)
+                .build();
+    }
+
+    private UIElement buildDemandsSection() {
+        this.demandsList = ScrollableList.builder()
+                .rowHeight(ITEM_CELL_SIZE)
+                .rowFactory(this::buildDemandRows)
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .padding(Insets.NONE)
+                .alternatingRowColors(0, 0)
+                .build();
+        this.demandsList.rebuildRows();
+
+        return LinearLayout.vertical()
+                .width(SizeConstraint.FILL)
+                .height(new SizeConstraint.Weighted(1))
+                .gap(2)
+                .child(Elements.text(() -> Component.translatable(TRADES_DEMANDS_KEY), theme.subtleTextColor()))
+                .child(this.demandsList)
+                .build();
+    }
+
+    private List<UIElement> buildInventoryRows() {
+        List<BackpackEntry> entries = this.inventorySnapshot != null
+                ? this.inventorySnapshot.entries()
+                : List.of();
+
+        if (entries.isEmpty()) {
+            return List.of();
+        }
+
+        int rowCount = (entries.size() + this.inventoryColumns - 1) / this.inventoryColumns;
+        List<UIElement> rows = new ArrayList<>(rowCount);
+
+        for (int row = 0; row < rowCount; row++) {
+            LinearLayout.Builder rowLayout = LinearLayout.horizontal()
+                    .width(SizeConstraint.WRAP)
+                    .height(SizeConstraint.fixed(ITEM_CELL_SIZE))
+                    .gap(0);
+
+            for (int col = 0; col < this.inventoryColumns; col++) {
+                int index = row * this.inventoryColumns + col;
+                if (index < entries.size()) {
+                    final BackpackEntry entry = entries.get(index);
+                    final ItemStack stack = entry.representative();
+                    rowLayout.child(Elements.itemIcon(
+                            () -> stack,
+                            theme::borderLight,
+                            () -> stack,
+                            entry::count
+                    ));
+                }
+            }
+            rows.add(rowLayout.build());
+        }
+
+        return rows;
+    }
+
+    private Component getInventoryHeaderComponent() {
+        int distinctKinds = this.inventorySnapshot != null ? this.inventorySnapshot.distinctKinds() : 0;
+        int totalItems = this.inventorySnapshot != null ? this.inventorySnapshot.totalItemCount() : 0;
+        return Component.translatable(INVENTORY_KEY, distinctKinds, totalItems);
+    }
+
+    private List<UIElement> buildOfferRows() {
+        if (this.tradeCatalogSnapshot == null || this.tradeCatalogSnapshot.offers().isEmpty()) {
+            return List.of();
+        }
+
+        List<ItemStack> offerStacks = this.tradeCatalogSnapshot.offers().stream()
+                .map(this::createOfferTooltipStack)
+                .toList();
+        return buildTradeCatalogItemRows(offerStacks);
+    }
+
+    private List<UIElement> buildDemandRows() {
+        if (this.latestDemandSnapshot == null || this.latestDemandSnapshot.entries().isEmpty()) {
+            return List.of();
+        }
+
+        return buildDemandDisplayRows(this.latestDemandSnapshot.entries());
+    }
+
+    private List<UIElement> buildDemandDisplayRows(@Nonnull List<DemandDisplayEntry> entries) {
+        int rowCount = (entries.size() + this.tradeCatalogColumns - 1) / this.tradeCatalogColumns;
+        List<UIElement> rows = new ArrayList<>(rowCount);
+
+        for (int row = 0; row < rowCount; row++) {
+            LinearLayout.Builder rowLayout = LinearLayout.horizontal()
+                    .width(SizeConstraint.WRAP)
+                    .height(SizeConstraint.fixed(ITEM_CELL_SIZE))
+                    .gap(0);
+
+            for (int col = 0; col < this.tradeCatalogColumns; col++) {
+                int index = row * this.tradeCatalogColumns + col;
+                if (index < entries.size()) {
+                    final DemandDisplayEntry entry = entries.get(index);
+                    final ItemStack stack = createDemandTooltipStack(entry);
+                    rowLayout.child(Elements.itemIcon(
+                            () -> stack,
+                            () -> entry.active() ? theme.successColor() : theme.borderLight(),
+                            () -> stack
+                    ));
+                }
+            }
+            rows.add(rowLayout.build());
+        }
+
+        return rows;
+    }
+
+    private List<UIElement> buildTradeCatalogItemRows(@Nonnull List<ItemStack> stacks) {
+        int rowCount = (stacks.size() + this.tradeCatalogColumns - 1) / this.tradeCatalogColumns;
+        List<UIElement> rows = new ArrayList<>(rowCount);
+
+        for (int row = 0; row < rowCount; row++) {
+            LinearLayout.Builder rowLayout = LinearLayout.horizontal()
+                    .width(SizeConstraint.WRAP)
+                    .height(SizeConstraint.fixed(ITEM_CELL_SIZE))
+                    .gap(0);
+
+            for (int col = 0; col < this.tradeCatalogColumns; col++) {
+                int index = row * this.tradeCatalogColumns + col;
+                if (index < stacks.size()) {
+                    final ItemStack stack = stacks.get(index);
+                    rowLayout.child(Elements.itemIcon(
+                            () -> stack,
+                            theme::borderLight,
+                            () -> stack
+                    ));
+                }
+            }
+            rows.add(rowLayout.build());
+        }
+
+        return rows;
+    }
+
+    private ItemStack createOfferTooltipStack(@Nonnull OfferEntry offer) {
+        ItemStack stack = createDisplayStack(offer.match());
+        List<Component> lore = List.of(
+                Component.literal("Bundle: " + offer.bundleSize() + "x")
+                        .withStyle(style -> style.withItalic(false))
+                        .withStyle(ChatFormatting.GRAY),
+                Component.literal("Bundle price: " + offer.basePrice() + " ± " + offer.priceJitter())
+                        .withStyle(style -> style.withItalic(false))
+                        .withStyle(ChatFormatting.GRAY),
+                Component.literal("Surplus threshold: " + offer.surplusThreshold())
+                        .withStyle(style -> style.withItalic(false))
+                        .withStyle(ChatFormatting.GRAY)
+        );
+        return withLore(stack, lore);
+    }
+
+    private ItemStack createDemandTooltipStack(@Nonnull DemandDisplayEntry demand) {
+        ItemStack stack = createDisplayStack(demand.match());
+        List<Component> lore = new ArrayList<>();
+        lore.add(Component.literal("Keep at least: " + demand.desiredMinCount())
+                .withStyle(style -> style.withItalic(false))
+                .withStyle(ChatFormatting.GRAY));
+        lore.add(Component.literal("Base price: " + demand.basePricePerUnit() + " per unit")
+                .withStyle(style -> style.withItalic(false))
+                .withStyle(ChatFormatting.GRAY));
+        lore.add(Component.literal("Base priority: " + demand.basePriority())
+                .withStyle(style -> style.withItalic(false))
+                .withStyle(ChatFormatting.GRAY));
+        ActiveDemand activeDemand = demand.activeDemand();
+        if (activeDemand != null) {
+            lore.add(Component.literal("Desired count: " + activeDemand.desiredCount())
+                    .withStyle(style -> style.withItalic(false))
+                    .withStyle(ChatFormatting.GRAY));
+            lore.add(Component.literal("Priority: " + activeDemand.priority())
+                    .withStyle(style -> style.withItalic(false))
+                    .withStyle(ChatFormatting.GRAY));
+            lore.add(Component.literal("Origin: " + activeDemand.origin().name())
+                    .withStyle(style -> style.withItalic(false))
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        return withLore(stack, lore);
+    }
+
+    private ItemStack createDisplayStack(@Nonnull ItemMatch match) {
+        return switch (match) {
+            case ItemMatch.ItemRef itemRef -> {
+                Item item = BuiltInRegistries.ITEM.get(itemRef.id());
+                yield item == Items.AIR ? new ItemStack(Items.BARRIER) : item.getDefaultInstance();
+            }
+            case ItemMatch.TagRef tagRef -> {
+                ItemStack stack = new ItemStack(Items.NAME_TAG);
+                stack.set(DataComponents.CUSTOM_NAME, Component.literal(tagRef.tag().location().toString())
+                        .withStyle(style -> style.withItalic(false))
+                        .withStyle(ChatFormatting.GOLD));
+                yield stack;
+            }
+        };
+    }
+
+    private static ItemStack withLore(@Nonnull ItemStack stack, @Nonnull List<Component> lore) {
+        ItemStack tooltipStack = stack.copy();
+        tooltipStack.set(DataComponents.LORE, new ItemLore(lore));
+        return tooltipStack;
+    }
+
+    // Footer
+
+    private UIElement buildFooter(@Nonnull Button closeBtn) {
+        return LinearLayout.horizontal()
+                .height(SizeConstraint.fixed(FOOTER_HEIGHT))
+                .width(SizeConstraint.FILL)
+                .padding(Insets.symmetric(2, 8))
+                .crossAxisAlignment(LinearLayout.CrossAxisAlignment.CENTER)
+                .child(buildConnectionStatus())
+                .child(Elements.flexSpacer())
+                .child(new WidgetElement(closeBtn))
+                .build();
+    }
+
+    private UIElement buildConnectionStatus() {
+        Component connectionLabel = Component.translatable(CONNECTION_KEY);
+        Component okStatus = Component.translatable(CONNECTION_OK_KEY);
+        Component disconnectedStatus = Component.translatable(CONNECTION_DISCONNECTED_KEY);
+
+        return Elements.custom(SizeConstraint.WRAP, SizeConstraint.fixed(12), (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            boolean stale = this.uiClientState.isSnapshotUpdateStale(this.sessionId)
+                    || this.uiClientState.isHeartbeatAckStale(this.sessionId);
+
+            int labelWidth = this.font.width(connectionLabel);
+            graphics.drawString(this.font, connectionLabel, bounds.x(), bounds.y(), theme.textColor(), false);
+
+            Component status;
+            int statusColor;
+            String tooltipKey;
+            if (stale) {
+                status = disconnectedStatus;
+                statusColor = theme.errorColor();
+                tooltipKey = CONNECTION_DISCONNECTED_TOOLTIP_KEY;
+            } else {
+                status = okStatus;
+                statusColor = theme.successColor();
+                tooltipKey = CONNECTION_OK_TOOLTIP_KEY;
+            }
+            int statusX = bounds.x() + labelWidth + 2;
+            graphics.drawString(this.font, status, statusX, bounds.y(), statusColor, false);
+
+            // Hover tooltip
+            int totalWidth = labelWidth + 2 + this.font.width(status);
+            if (mouseX >= bounds.x() && mouseX <= bounds.x() + totalWidth
+                    && mouseY >= bounds.y() && mouseY <= bounds.y() + 10) {
+                graphics.renderTooltip(this.font, Component.translatable(tooltipKey), mouseX, mouseY);
+            }
+        });
+    }
+
+    private UIElement buildUnavailableOverlay() {
+        return Elements.custom(SizeConstraint.FILL, SizeConstraint.FILL, (graphics, bounds, mouseX, mouseY, partialTick) -> {
+            if (!this.uiClientState.isSessionTerminalUnavailable()) {
+                return;
+            }
+            Component message = this.uiClientState.unavailableReasonKey()
+                    .map(Component::translatable)
+                    .orElseGet(() -> Component.translatable(UNAVAILABLE_KEY));
+            graphics.fill(bounds.x() + 8, bounds.y() + 8, bounds.right() - 8, bounds.bottom() - FOOTER_HEIGHT - 8, theme.overlayColor());
+            graphics.drawCenteredString(
+                    this.font,
+                    message,
+                    bounds.x() + bounds.width() / 2,
+                    bounds.y() + bounds.height() / 2 - 4,
+                    theme.errorColor()
+            );
+        });
+    }
+
+    // Utility
+
+    private int getReputationColor(int reputation) {
+        if (reputation <= -10) return theme.errorColor();
+        if (reputation < 10) return theme.warningColor();
+        return theme.successColor();
+    }
+
+    // Panel sizing
+
+    private int getPanelWidth() {
+        int viewportMaxWidth = Math.max(240, this.width - PANEL_MARGIN * 2);
+        int maxWidth = Math.min(MAX_GUI_WIDTH, viewportMaxWidth);
+        int minWidth = Math.min(MIN_GUI_WIDTH, maxWidth);
+        int preferredWidth = Math.round(this.width * PANEL_WIDTH_RATIO);
+        return Mth.clamp(preferredWidth, minWidth, maxWidth);
+    }
+
+    private int getPanelHeight() {
+        int viewportMaxHeight = Math.max(180, this.height - PANEL_MARGIN * 2);
+        int maxHeight = Math.min(MAX_GUI_HEIGHT, viewportMaxHeight);
+        int minHeight = Math.min(MIN_GUI_HEIGHT, maxHeight);
+        int preferredHeight = Math.round(this.height * PANEL_HEIGHT_RATIO);
+        return Mth.clamp(preferredHeight, minHeight, maxHeight);
+    }
+
+}

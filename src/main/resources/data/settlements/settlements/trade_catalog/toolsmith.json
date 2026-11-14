@@ -1,0 +1,209 @@
+{
+  "profession": "minecraft:toolsmith",
+  "stock": [
+    {
+      "id": "buy_iron",
+      "match": {
+        "item": "minecraft:iron_ingot"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 6,
+        "priority": 50
+      },
+      "dump": {
+        "above": 64
+      }
+    },
+    {
+      "id": "buy_iron_nugget",
+      "match": {
+        "item": "minecraft:iron_nugget"
+      },
+      "restock": {
+        "below": 9,
+        "buyPricePerUnit": 1,
+        "priority": 45
+      }
+    },
+    {
+      "id": "buy_coal",
+      "match": {
+        "item": "minecraft:coal"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_stick",
+      "match": {
+        "item": "minecraft:stick"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 1,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_flint",
+      "match": {
+        "item": "minecraft:flint"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 1,
+        "priority": 30
+      }
+    },
+    {
+      "id": "shears",
+      "match": {
+        "item": "minecraft:shears"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 6,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "iron_pickaxe",
+      "match": {
+        "item": "minecraft:iron_pickaxe"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "iron_axe",
+      "match": {
+        "item": "minecraft:iron_axe"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "iron_shovel",
+      "match": {
+        "item": "minecraft:iron_shovel"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 10,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "iron_hoe",
+      "match": {
+        "item": "minecraft:iron_hoe"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 10,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "lantern",
+      "match": {
+        "item": "minecraft:lantern"
+      },
+      "offer": {
+        "above": 4,
+        "basePrice": 4,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 32
+      }
+    },
+    {
+      "id": "buy_string",
+      "match": {
+        "item": "minecraft:string"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 35
+      }
+    },
+    {
+      "id": "fishing_rod",
+      "match": {
+        "item": "minecraft:fishing_rod"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 10,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "bucket",
+      "match": {
+        "item": "minecraft:bucket"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 6,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "flint_and_steel",
+      "match": {
+        "item": "minecraft:flint_and_steel"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 4,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    }
+  ]
+}

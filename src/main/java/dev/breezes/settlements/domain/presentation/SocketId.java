@@ -1,0 +1,13 @@
+package dev.breezes.settlements.domain.presentation;
+
+public enum SocketId {
+
+    CROSSED_ARMS_CENTER,
+    LANTERN,
+    HAND_RIGHT,
+    HAND_LEFT,
+    FEET_CENTER,
+    UMBRELLA_LEFT,
+    UMBRELLA_RIGHT
+
+}

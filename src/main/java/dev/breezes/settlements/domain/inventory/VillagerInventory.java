@@ -1,0 +1,224 @@
+package dev.breezes.settlements.domain.inventory;
+
+import dev.breezes.settlements.domain.economy.catalog.ItemMatch;
+import lombok.Getter;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+
+public class VillagerInventory implements IVillagerEquipment {
+
+    private final IVillagerBackpack backpack;
+    private final EnumMap<EquipmentSlot, ItemStack> equipped;
+    private final BooleanSupplier bypassRequirements;
+
+    @Getter
+    private int inventoryVersion;
+
+    /**
+     * @param bypassRequirements whether item requirements are bypassed, polled on every requirement check rather than
+     *                           captured at construction
+     */
+    public VillagerInventory(@Nonnull BooleanSupplier bypassRequirements) {
+        this.backpack = new StackLedger();
+        this.equipped = new EnumMap<>(EquipmentSlot.class);
+        this.bypassRequirements = bypassRequirements;
+        this.inventoryVersion = 0;
+    }
+
+    public int count(@Nonnull Item item) {
+        return this.backpack.count(item);
+    }
+
+    public boolean contains(@Nonnull Item item) {
+        return this.backpack.contains(item);
+    }
+
+    public boolean anyMatch(@Nonnull Predicate<ItemStack> predicate) {
+        return this.backpack.anyMatch(predicate);
+    }
+
+    public Optional<ItemStack> findFirst(@Nonnull Predicate<ItemStack> predicate) {
+        return this.backpack.findFirst(predicate);
+    }
+
+    public int countMatching(@Nonnull ItemMatch match) {
+        return this.backpack.countMatching(match);
+    }
+
+    public int consumeMatching(@Nonnull ItemMatch match, int amount) {
+        if (amount <= 0) {
+            return 0;
+        }
+
+        int consumed = this.backpack.consumeMatching(match, amount);
+        if (consumed > 0) {
+            this.inventoryVersion++;
+        }
+
+        return consumed;
+    }
+
+    public int consume(@Nonnull Item item, int amount) {
+        if (amount <= 0) {
+            return 0;
+        }
+        int consumed = this.backpack.consume(item, amount);
+        if (consumed > 0) {
+            this.inventoryVersion++;
+        }
+        return consumed;
+    }
+
+    public int consume(@Nonnull ItemStack variant, int amount) {
+        int consumed = this.backpack.consume(variant, amount);
+        if (consumed > 0) {
+            this.inventoryVersion++;
+        }
+        return consumed;
+    }
+
+    public void add(@Nonnull ItemStack stack) {
+        if (stack.isEmpty()) {
+            return;
+        }
+        this.backpack.add(stack);
+        this.inventoryVersion++;
+    }
+
+    public List<BackpackEntry> entries() {
+        return this.backpack.entries();
+    }
+
+    /**
+     * Empties the whole inventory and returns the removed items as a flat list of drop-ready stacks.
+     */
+    public List<ItemStack> drainAll() {
+        List<ItemStack> drained = new ArrayList<>();
+
+        for (BackpackEntry entry : this.backpack.entries()) {
+            ItemStack representative = entry.representative();
+            int maxStackSize = representative.getMaxStackSize();
+            int remaining = entry.count();
+            while (remaining > 0) {
+                int chunk = Math.min(remaining, maxStackSize);
+                drained.add(representative.copyWithCount(chunk));
+                remaining -= chunk;
+            }
+        }
+        this.backpack.clear();
+
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack equippedStack = this.equipped.get(slot);
+            if (equippedStack != null && !equippedStack.isEmpty()) {
+                drained.add(equippedStack.copy());
+            }
+        }
+        this.equipped.clear();
+
+        if (!drained.isEmpty()) {
+            this.inventoryVersion++;
+        }
+        return drained;
+    }
+
+    public int totalItemCount() {
+        return this.backpack.totalItemCount();
+    }
+
+    public int distinctKinds() {
+        return this.backpack.distinctKinds();
+    }
+
+    // Requirement bypass
+
+    /**
+     * Whether behaviors may run without holding the items they require.
+     */
+    public boolean requirementsBypassed() {
+        return this.bypassRequirements.getAsBoolean();
+    }
+
+    public boolean containsOrBypassed(@Nonnull Item item) {
+        return this.requirementsBypassed() || this.contains(item);
+    }
+
+    /**
+     * Consumes up to the given amount of the item and returns whether the requirement is met.
+     * Held items are consumed even when requirements are bypassed, and a partial holding is consumed even
+     * when this returns false.
+     */
+    public boolean consumeOrBypassed(@Nonnull Item item, int amount) {
+        // Consume first: a bypass waives only the shortfall
+        return this.consume(item, amount) == amount || this.requirementsBypassed();
+    }
+
+    /**
+     * The variant-matched counterpart of {@link #consumeOrBypassed(Item, int)}.
+     */
+    public boolean consumeOrBypassed(@Nonnull ItemStack variant, int amount) {
+        return this.consume(variant, amount) == amount || this.requirementsBypassed();
+    }
+
+    // Equipment
+
+    public Optional<ItemStack> getMainHand() {
+        return this.getEquipped(EquipmentSlot.MAIN_HAND);
+    }
+
+    public Optional<ItemStack> getOffHand() {
+        return this.getEquipped(EquipmentSlot.OFF_HAND);
+    }
+
+    @Override
+    public Optional<ItemStack> getEquipped(@Nonnull EquipmentSlot slot) {
+        ItemStack equippedStack = this.equipped.get(slot);
+        return equippedStack == null || equippedStack.isEmpty() ? Optional.empty() : Optional.of(equippedStack);
+    }
+
+    public Optional<ItemStack> setEquipped(@Nonnull EquipmentSlot slot, @Nullable ItemStack newItem) {
+        ItemStack previous = this.equipped.get(slot);
+
+        if (newItem == null || newItem.isEmpty()) {
+            this.equipped.remove(slot);
+        } else {
+            // The loadout owns its stored stacks so behavior code cannot mutate equipment by retaining a reference.
+            this.equipped.put(slot, newItem.copy());
+        }
+
+        this.inventoryVersion++;
+        return previous == null || previous.isEmpty() ? Optional.empty() : Optional.of(previous);
+    }
+
+    @Override
+    public Set<EquipmentSlot> occupiedSlots() {
+        EnumSet<EquipmentSlot> occupiedSlots = EnumSet.noneOf(EquipmentSlot.class);
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack stack = this.equipped.get(slot);
+            if (stack != null && !stack.isEmpty()) {
+                occupiedSlots.add(slot);
+            }
+        }
+        return Collections.unmodifiableSet(occupiedSlots);
+    }
+
+    public Optional<ItemStack> setMainHand(ItemStack newItem) {
+        return this.setEquipped(EquipmentSlot.MAIN_HAND, newItem);
+    }
+
+    public Optional<ItemStack> setOffHand(ItemStack newItem) {
+        return this.setEquipped(EquipmentSlot.OFF_HAND, newItem);
+    }
+
+}

@@ -1,0 +1,83 @@
+{
+  "profession": "minecraft:cartographer",
+  "stock": [
+    {
+      "id": "buy_cane",
+      "match": {
+        "item": "minecraft:sugar_cane"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 1,
+        "priority": 50
+      }
+    },
+    {
+      "id": "buy_redstone",
+      "match": {
+        "item": "minecraft:redstone"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_iron",
+      "match": {
+        "item": "minecraft:iron_ingot"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 6,
+        "priority": 40
+      }
+    },
+    {
+      "id": "paper",
+      "match": {
+        "item": "minecraft:paper"
+      },
+      "offer": {
+        "above": 32,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 16
+      },
+      "dump": {
+        "above": 256
+      }
+    },
+    {
+      "id": "map",
+      "match": {
+        "item": "minecraft:map"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "compass",
+      "match": {
+        "item": "minecraft:compass"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    }
+  ]
+}

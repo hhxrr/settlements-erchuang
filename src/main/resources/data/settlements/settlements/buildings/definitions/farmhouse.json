@@ -1,0 +1,16 @@
+{
+  "id": "settlements:building_definitions/farmhouse",
+  "placement_priority": 50,
+  "zone_tier_min": 3,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [],
+  "forbidden_resources": [],
+  "trait_affinities": {
+    "settlements:settlement_traits/farming": 0.7
+  },
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 11,
+  "footprint_depth": 13,
+  "npc_count": 0
+}

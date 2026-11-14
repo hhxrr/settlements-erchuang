@@ -1,0 +1,183 @@
+package dev.breezes.settlements.application.ai.trading;
+
+import dev.breezes.settlements.di.ServerScope;
+import dev.breezes.settlements.domain.time.ClockTicks;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import jakarta.inject.Inject;
+import lombok.CustomLog;
+import net.minecraft.world.item.Item;
+
+import javax.annotation.Nonnull;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Active villager trade sessions and pending invitations, with phase-specific timeouts.
+ */
+@ServerScope
+@CustomLog
+public final class TradeSessionRegistry {
+
+    /**
+     * Maximum approach duration, excluding the registry's timeout slack.
+     */
+    public static final ClockTicks MAX_APPROACH_DURATION = ClockTicks.seconds(10);
+
+    // Allow the visual exchange and its completion outcome before timing out a settled deal.
+    private static final ClockTicks MAX_DEAL_DURATION = ClockTicks.seconds(10);
+
+    private static final int DEADLINE_SLACK_TICKS = ClockTicks.seconds(2).getTicksAsInt();
+
+    private final TradingConfig tradingConfig;
+
+    private final Map<UUID, TradeSession> activeSessionsByParticipant = new ConcurrentHashMap<>();
+    private final Map<UUID, SessionParticipants> sessionParticipantsBySessionId = new ConcurrentHashMap<>();
+    private final Map<UUID, TradeInvite> invitesByTarget = new ConcurrentHashMap<>();
+
+    @Inject
+    public TradeSessionRegistry(@Nonnull TradingConfig tradingConfig) {
+        this.tradingConfig = tradingConfig;
+    }
+
+    public TradeSession sendInvite(@Nonnull BaseVillager initiator,
+                                   @Nonnull BaseVillager target,
+                                   @Nonnull UUID buyerId,
+                                   @Nonnull UUID sellerId,
+                                   @Nonnull Item matchedItem,
+                                   int bundleSize,
+                                   int priceJitter,
+                                   int buyerOffer,
+                                   int sellerAsk,
+                                   int negotiationRoundsRemaining,
+                                   long currentGameTime) {
+        UUID sessionId = UUID.randomUUID();
+        TradeSession session = TradeSession.builder()
+                .sessionId(sessionId)
+                .initiatorId(initiator.getUUID())
+                .responderId(target.getUUID())
+                .buyerId(buyerId)
+                .sellerId(sellerId)
+                .matchedItem(matchedItem)
+                .bundleSize(bundleSize)
+                .priceJitter(priceJitter)
+                .buyerOffer(buyerOffer)
+                .sellerAsk(sellerAsk)
+                .negotiationRoundsRemaining(negotiationRoundsRemaining)
+                .phase(TradeSessionPhase.SYN_SENT)
+                .phaseEnteredGameTime(currentGameTime)
+                .build();
+
+        long inviteExpireGameTime = currentGameTime + ClockTicks.seconds(this.tradingConfig.inviteTimeoutSeconds()).getTicks();
+        TradeInvite invite = new TradeInvite(sessionId, initiator.getUUID(), target.getUUID(), currentGameTime, inviteExpireGameTime);
+
+        putSession(session);
+        this.invitesByTarget.put(target.getUUID(), invite);
+        log.debug("Created trade invite: sessionId={}, initiator={}, responder={}, buyer={}, seller={}, item={}, bundleSize={}, priceJitter={}, buyerOffer={}, sellerAsk={}",
+                sessionId, initiator.getUUID(), target.getUUID(), buyerId, sellerId, matchedItem, bundleSize, priceJitter, buyerOffer, sellerAsk);
+        return session;
+    }
+
+    public boolean hasInviteFor(@Nonnull UUID targetId) {
+        return this.invitesByTarget.containsKey(targetId);
+    }
+
+    public Optional<TradeInvite> getInvite(@Nonnull UUID targetId) {
+        return Optional.ofNullable(this.invitesByTarget.get(targetId));
+    }
+
+    public TradeSession acceptInvite(@Nonnull UUID targetId, long currentGameTime) {
+        TradeInvite invite = Optional.ofNullable(this.invitesByTarget.remove(targetId))
+                .orElseThrow(() -> new IllegalArgumentException("No pending trade invite exists for targetId=" + targetId));
+
+        TradeSession session = Optional.ofNullable(this.activeSessionsByParticipant.get(targetId))
+                .orElseThrow(() -> new IllegalStateException("Pending trade invite had no matching active session"));
+
+        session.transitionTo(TradeSessionPhase.ESTABLISHED, currentGameTime);
+        log.debug("Accepted trade invite: sessionId={}, targetId={}, phase={}", session.getSessionId(), targetId, session.getPhase());
+        return session;
+    }
+
+    public Optional<TradeSession> getActiveSession(@Nonnull UUID villagerId) {
+        return Optional.ofNullable(this.activeSessionsByParticipant.get(villagerId));
+    }
+
+    public void closeSession(@Nonnull UUID sessionId, @Nonnull CloseReason reason) {
+        SessionParticipants participants = this.sessionParticipantsBySessionId.remove(sessionId);
+        if (participants == null) {
+            return;
+        }
+
+        TradeSession session = this.activeSessionsByParticipant.remove(participants.firstParticipantId());
+        this.activeSessionsByParticipant.remove(participants.secondParticipantId());
+        this.invitesByTarget.remove(participants.secondParticipantId());
+        this.invitesByTarget.remove(participants.firstParticipantId());
+
+        if (session == null) {
+            return;
+        }
+
+        TradeSessionPhase terminalPhase = switch (reason) {
+            case DEAL -> TradeSessionPhase.DEAL;
+            case WALK_AWAY -> TradeSessionPhase.WALK_AWAY;
+            case EXTERNAL_CANCEL -> TradeSessionPhase.EXTERNAL_CANCEL;
+            case TIMEOUT -> TradeSessionPhase.CLOSED;
+        };
+        TradeSessionPhase closedPhase = session.getPhase();
+        session.transitionTo(terminalPhase, session.getPhaseEnteredGameTime());
+        log.debug("Closed trade session: sessionId={}, reason={}, closedPhase={}, terminalPhase={}",
+                sessionId, reason, closedPhase, terminalPhase);
+    }
+
+    public void tickTimeouts(long currentGameTime) {
+        this.invitesByTarget.entrySet().removeIf(entry -> entry.getValue().expireGameTime() < currentGameTime);
+
+        // Both participant entries can refer to the same session, so evaluate its timeout only once.
+        // TODO: reuse the deduplication set to avoid allocating it on every timeout tick.
+        Set<UUID> seenSessionIds = new HashSet<>();
+        for (TradeSession session : this.activeSessionsByParticipant.values()) {
+            if (!seenSessionIds.add(session.getSessionId())) {
+                continue;
+            }
+
+            long maxDurationTicks = maxDurationTicks(session.getPhase());
+            if (maxDurationTicks < 0) {
+                continue;
+            }
+            if ((currentGameTime - session.getPhaseEnteredGameTime()) > maxDurationTicks) {
+                log.trace("Trade session timed out: sessionId={}, phase={}, phaseEnteredGameTime={}, currentGameTime={}",
+                        session.getSessionId(), session.getPhase(), session.getPhaseEnteredGameTime(), currentGameTime);
+                closeSession(session.getSessionId(), CloseReason.TIMEOUT);
+            }
+        }
+    }
+
+    private long maxDurationTicks(@Nonnull TradeSessionPhase phase) {
+        return switch (phase) {
+            case SYN_SENT -> ClockTicks.seconds(this.tradingConfig.inviteTimeoutSeconds()).getTicks();
+            case ESTABLISHED -> ClockTicks.seconds(2).getTicks();
+            case APPROACH -> MAX_APPROACH_DURATION.getTicks() + DEADLINE_SLACK_TICKS;
+            case OPENING_OFFER -> (this.tradingConfig.openingOfferDuration().getTicks() * 2L) + DEADLINE_SLACK_TICKS;
+            case NEGOTIATING ->
+                    (this.tradingConfig.negotiationRoundDuration().getTicks() * 2L * this.tradingConfig.maxNegotiationRounds())
+                            + DEADLINE_SLACK_TICKS;
+            case DEAL -> MAX_DEAL_DURATION.getTicks() + DEADLINE_SLACK_TICKS;
+            case WALK_AWAY -> this.tradingConfig.walkawayDuration().getTicks() + DEADLINE_SLACK_TICKS;
+            case EXTERNAL_CANCEL, CLOSED -> -1L;
+        };
+    }
+
+    private void putSession(@Nonnull TradeSession session) {
+        SessionParticipants participants = new SessionParticipants(session.getInitiatorId(), session.getResponderId());
+        this.activeSessionsByParticipant.put(participants.firstParticipantId(), session);
+        this.activeSessionsByParticipant.put(participants.secondParticipantId(), session);
+        this.sessionParticipantsBySessionId.put(session.getSessionId(), participants);
+    }
+
+    private record SessionParticipants(UUID firstParticipantId, UUID secondParticipantId) {
+    }
+
+}

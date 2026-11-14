@@ -1,0 +1,19 @@
+{
+  "id": "settlements:building_definitions/fish_drying_rack",
+  "placement_priority": 35,
+  "zone_tier_min": 3,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [
+    "FRESHWATER",
+    "COASTAL"
+  ],
+  "forbidden_resources": [],
+  "trait_affinities": {
+    "settlements:settlement_traits/fishing": 0.5
+  },
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 5,
+  "footprint_depth": 7,
+  "npc_count": 0
+}

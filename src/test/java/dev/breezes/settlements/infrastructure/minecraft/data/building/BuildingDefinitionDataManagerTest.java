@@ -1,0 +1,283 @@
+package dev.breezes.settlements.infrastructure.minecraft.data.building;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import dev.breezes.settlements.domain.generation.model.building.BuildingDefinition;
+import dev.breezes.settlements.domain.generation.model.profile.TraitId;
+import net.minecraft.resources.ResourceLocation;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class BuildingDefinitionDataManagerTest {
+
+    private static final TraitId LUMBER = TraitId.of("settlements:settlement_traits/lumber");
+
+    private final BuildingDefinitionDataManager manager = new BuildingDefinitionDataManager();
+
+    @BeforeEach
+    void setUp() throws IOException {
+        this.manager.reload(loadDefaultEntries());
+    }
+
+    @Test
+    void loads_all_default_definitions() {
+        assertEquals(15, this.manager.allBuildings().size());
+    }
+
+    @Test
+    void all_buildings_have_unique_ids() {
+        Set<String> ids = new HashSet<>();
+        for (BuildingDefinition definition : this.manager.allBuildings()) {
+            assertTrue(ids.add(definition.id()));
+        }
+    }
+
+    @Test
+    void constrained_have_resources() {
+        assertFalse(this.manager.constrainedBuildings().isEmpty());
+        assertTrue(this.manager.constrainedBuildings().stream().noneMatch(definition -> definition.requiresResources().isEmpty()));
+    }
+
+    @Test
+    void unconstrained_empty_resources() {
+        assertFalse(this.manager.unconstrainedBuildings().isEmpty());
+        assertTrue(this.manager.unconstrainedBuildings().stream().allMatch(definition -> definition.requiresResources().isEmpty()));
+    }
+
+    @Test
+    void for_trait_sorted_by_affinity() {
+        List<BuildingDefinition> lumberBuildings = this.manager.forTrait(LUMBER);
+
+        assertEquals(List.of("settlements:building_definitions/sawmill", "settlements:building_definitions/log_storage"),
+                lumberBuildings.stream().map(BuildingDefinition::id).toList());
+    }
+
+    @Test
+    void for_trait_excludes_unrelated() {
+        List<String> lumberBuildings = this.manager.forTrait(LUMBER).stream()
+                .map(BuildingDefinition::id)
+                .toList();
+
+        assertFalse(lumberBuildings.contains("settlements:building_definitions/mine_entrance"));
+    }
+
+    @Test
+    void universal_empty_affinities() {
+        assertTrue(this.manager.byId("settlements:building_definitions/house").orElseThrow().traitAffinities().isEmpty());
+        assertTrue(this.manager.byId("settlements:building_definitions/well").orElseThrow().traitAffinities().isEmpty());
+        assertTrue(this.manager.byId("settlements:building_definitions/town_hall").orElseThrow().traitAffinities().isEmpty());
+    }
+
+    @Test
+    void by_id_found_and_not_found() {
+        assertTrue(this.manager.byId("settlements:building_definitions/tavern").isPresent());
+        assertTrue(this.manager.byId("settlements:not_real").isEmpty());
+    }
+
+    @Test
+    void all_footprints_valid() {
+        for (BuildingDefinition definition : this.manager.allBuildings()) {
+            assertTrue(definition.footprint().width() > 0);
+            assertTrue(definition.footprint().depth() > 0);
+        }
+    }
+
+    @Test
+    void all_zone_preferences_valid() {
+        for (BuildingDefinition definition : this.manager.allBuildings()) {
+            assertTrue(definition.zoneTierPreference().minInclusive() <= definition.zoneTierPreference().maxInclusive());
+            assertTrue(definition.zoneTierPreference().maxInclusive() <= 4);
+        }
+    }
+
+    @Test
+    void partition_is_complete() {
+        assertEquals(this.manager.allBuildings().size(),
+                this.manager.constrainedBuildings().size() + this.manager.unconstrainedBuildings().size());
+    }
+
+    @Test
+    void malformed_zone_range_skipped() throws IOException {
+        Map<ResourceLocation, JsonElement> entries = loadDefaultEntries();
+        entries.put(resource("settlements:buildings/definitions/bad_range"), JsonParser.parseString("""
+                {
+                  "id": "settlements:building_definitions/bad_range_test",
+                  "placement_priority": 1,
+                  "zone_tier_min": 3,
+                  "zone_tier_max": 2,
+                  "requires_road_frontage": false,
+                  "requires_resources": [],
+                  "forbidden_resources": [],
+                  "trait_affinities": {},
+                  "minimum_rank": "FLAVOR",
+                  "footprint_width": 1,
+                  "footprint_depth": 1,
+                  "npc_count": 0
+                }
+                """));
+
+        this.manager.reload(entries);
+
+        assertEquals(15, this.manager.allBuildings().size());
+        assertTrue(this.manager.byId("settlements:building_definitions/bad_range_test").isEmpty());
+    }
+
+    @Test
+    void missing_id_skipped() throws IOException {
+        Map<ResourceLocation, JsonElement> entries = loadDefaultEntries();
+        entries.put(resource("settlements:buildings/definitions/missing_id"), JsonParser.parseString("""
+                {
+                  "placement_priority": 1,
+                  "zone_tier_min": 0,
+                  "zone_tier_max": 0,
+                  "requires_road_frontage": false,
+                  "requires_resources": [],
+                  "forbidden_resources": [],
+                  "trait_affinities": {},
+                  "minimum_rank": "FLAVOR",
+                  "footprint_width": 1,
+                  "footprint_depth": 1,
+                  "npc_count": 0
+                }
+                """));
+
+        this.manager.reload(entries);
+
+        assertEquals(15, this.manager.allBuildings().size());
+    }
+
+    @Test
+    void unknown_trait_in_affinities_rejects_whole_entry() {
+        this.manager.reload(Map.of(
+                resource("settlements:buildings/definitions/unknown_trait"),
+                JsonParser.parseString("""
+                        {
+                          "id": "settlements:building_definitions/unknown_trait_test",
+                          "placement_priority": 1,
+                          "zone_tier_min": 0,
+                          "zone_tier_max": 1,
+                          "requires_road_frontage": false,
+                          "requires_resources": [],
+                          "forbidden_resources": [],
+                          "trait_affinities": {
+                            "NOT_A_TRAIT": 0.9,
+                            "settlements:settlement_traits/lumber": 0.5
+                          },
+                          "minimum_rank": "FLAVOR",
+                          "footprint_width": 2,
+                          "footprint_depth": 2,
+                          "npc_count": 0
+                        }
+                        """)
+        ));
+
+        // Under strict decode a malformed trait id fails the whole entry rather than dropping just the bad key.
+        assertTrue(this.manager.byId("settlements:building_definitions/unknown_trait_test").isEmpty());
+    }
+
+    @Test
+    void unknown_resource_in_requires_rejects_whole_entry() {
+        this.manager.reload(Map.of(
+                resource("settlements:buildings/definitions/unknown_resource"),
+                JsonParser.parseString("""
+                        {
+                          "id": "settlements:building_definitions/unknown_resource_test",
+                          "placement_priority": 1,
+                          "zone_tier_min": 0,
+                          "zone_tier_max": 1,
+                          "requires_road_frontage": false,
+                          "requires_resources": ["NOT_A_RESOURCE", "LUMBER"],
+                          "forbidden_resources": [],
+                          "trait_affinities": {},
+                          "minimum_rank": "FLAVOR",
+                          "footprint_width": 2,
+                          "footprint_depth": 2,
+                          "npc_count": 0
+                        }
+                        """
+                )));
+
+        // An unknown resource tag anywhere in the list rejects the whole entry.
+        assertTrue(this.manager.byId("settlements:building_definitions/unknown_resource_test").isEmpty());
+    }
+
+    @Test
+    void preferred_tags_are_parsed_as_flat_strings() {
+        this.manager.reload(Map.of(
+                resource("settlements:buildings/definitions/preferred_tags"),
+                JsonParser.parseString("""
+                        {
+                          "id": "settlements:building_definitions/preferred_tags_test",
+                          "placement_priority": 1,
+                          "zone_tier_min": 0,
+                          "zone_tier_max": 1,
+                          "requires_road_frontage": false,
+                          "requires_resources": [],
+                          "forbidden_resources": [],
+                          "trait_affinities": {},
+                          "minimum_rank": "FLAVOR",
+                          "preferred_tags": ["taiga", "charred"],
+                          "footprint_width": 2,
+                          "footprint_depth": 2,
+                          "npc_count": 0
+                        }
+                        """)
+        ));
+
+        BuildingDefinition definition = this.manager.byId("settlements:building_definitions/preferred_tags_test").orElseThrow();
+        assertEquals(Set.of("taiga", "charred"), definition.preferredTags());
+    }
+
+    private static Map<ResourceLocation, JsonElement> loadDefaultEntries() throws IOException {
+        String[] files = {
+                "town_hall",
+                "tavern",
+                "market_stall",
+                "well",
+                "house",
+                "sawmill",
+                "log_storage",
+                "farmhouse",
+                "barn",
+                "dock",
+                "fish_drying_rack",
+                "mine_entrance",
+                "smelter",
+                "watchtower",
+                "barracks"
+        };
+
+        Map<ResourceLocation, JsonElement> entries = new HashMap<>();
+        for (String file : files) {
+            String resourcePath = "data/settlements/settlements/buildings/definitions/" + file + ".json";
+            try (InputStream stream = BuildingDefinitionDataManagerTest.class.getClassLoader().getResourceAsStream(resourcePath)) {
+                assertNotNull(stream, "Missing test resource: " + resourcePath);
+                try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                    entries.put(resource("settlements:buildings/definitions/" + file), JsonParser.parseReader(reader));
+                }
+            }
+        }
+        return entries;
+    }
+
+    private static ResourceLocation resource(String value) {
+        return ResourceLocation.parse(value);
+    }
+
+}

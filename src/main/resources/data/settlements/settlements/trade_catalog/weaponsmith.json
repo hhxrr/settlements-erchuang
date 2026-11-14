@@ -1,0 +1,83 @@
+{
+  "profession": "minecraft:weaponsmith",
+  "stock": [
+    {
+      "id": "buy_iron",
+      "match": {
+        "item": "minecraft:iron_ingot"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 6,
+        "priority": 50
+      }
+    },
+    {
+      "id": "buy_coal",
+      "match": {
+        "item": "minecraft:coal"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_stick",
+      "match": {
+        "item": "minecraft:stick"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 1,
+        "priority": 40
+      }
+    },
+    {
+      "id": "iron_sword",
+      "match": {
+        "item": "minecraft:iron_sword"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "iron_axe",
+      "match": {
+        "item": "minecraft:iron_axe"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 12,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    },
+    {
+      "id": "shield",
+      "match": {
+        "item": "minecraft:shield"
+      },
+      "offer": {
+        "above": 1,
+        "basePrice": 10,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 8
+      }
+    }
+  ]
+}

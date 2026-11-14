@@ -1,0 +1,183 @@
+package dev.breezes.settlements.bootstrap.event;
+
+import dev.breezes.settlements.bootstrap.registry.blockentities.BlockEntityTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.entities.EntityRegistry;
+import dev.breezes.settlements.bootstrap.registry.items.ItemRegistry;
+import dev.breezes.settlements.bootstrap.registry.particles.ParticleTypeRegistry;
+import dev.breezes.settlements.di.ClientComponent;
+import dev.breezes.settlements.di.SettlementsDagger;
+import dev.breezes.settlements.infrastructure.minecraft.blocks.ballista.BallistaModel;
+import dev.breezes.settlements.infrastructure.minecraft.blocks.ballista.BallistaRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.blocks.cultivation.CultivationLilyRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.cats.rendering.SettlementsCatRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.client.BallistaBoltModel;
+import dev.breezes.settlements.infrastructure.minecraft.entities.client.BallistaBoltRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.client.VillagerFishingHookRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.transit.BusRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.model.SettlementsVillagerModel;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.model.UmbrellaModel;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.model.rendering.SettlementsVillagerRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.entities.wolves.rendering.SettlementsWolfRenderer;
+import dev.breezes.settlements.infrastructure.minecraft.items.VillagerTotemItem;
+import dev.breezes.settlements.infrastructure.rendering.debug.DevTooling;
+import dev.breezes.settlements.infrastructure.rendering.particles.EggSplatParticle;
+import dev.breezes.settlements.infrastructure.rendering.particles.OrbParticle;
+import dev.breezes.settlements.infrastructure.rendering.particles.SleepingZParticle;
+import dev.breezes.settlements.infrastructure.rendering.particles.StunnedStarParticle;
+import dev.breezes.settlements.shared.util.ResourceLocationUtil;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.entity.ChickenRenderer;
+import net.minecraft.client.renderer.entity.EntityRenderers;
+import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+
+import javax.annotation.Nullable;
+
+@EventBusSubscriber(Dist.CLIENT)
+public class ClientModEvents {
+
+    @SubscribeEvent
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        registerEntityRenderers();
+        registerItemProperties(event);
+        registerConfigScreen();
+    }
+
+    private static void registerEntityRenderers() {
+        EntityRenderers.register(EntityRegistry.BASE_VILLAGER.get(), SettlementsVillagerRenderer::new);
+        EntityRenderers.register(EntityRegistry.SETTLEMENTS_CAT.get(), SettlementsCatRenderer::new);
+        EntityRenderers.register(EntityRegistry.SETTLEMENTS_WOLF.get(), SettlementsWolfRenderer::new);
+        EntityRenderers.register(EntityRegistry.CUCCO.get(), ChickenRenderer::new);
+        EntityRenderers.register(EntityRegistry.VILLAGER_FISHING_HOOK.get(), VillagerFishingHookRenderer::new);
+        EntityRenderers.register(EntityRegistry.SETTLEMENTS_EGG.get(), ThrownItemRenderer::new);
+        EntityRenderers.register(EntityRegistry.BALLISTA_BOLT.get(), BallistaBoltRenderer::new);
+        EntityRenderers.register(EntityRegistry.BUS.get(), BusRenderer::new);
+    }
+
+    private static void registerItemProperties(FMLClientSetupEvent event) {
+        event.enqueueWork(() -> {
+            ItemProperties.register(
+                    ItemRegistry.VILLAGER_FISHING_ROD.get(),
+                    ResourceLocation.withDefaultNamespace("cast"),
+                    ClientModEvents::villagerFishingRodCastPredicate);
+            ItemProperties.register(
+                    ItemRegistry.VILLAGER_TOTEM.get(),
+                    ResourceLocationUtil.mod("totem_mode"),
+                    (stack, level, entity, seed) -> VillagerTotemItem.getMode(stack).getSerializedId()
+            );
+        });
+    }
+
+    private static float villagerFishingRodCastPredicate(ItemStack stack,
+                                                         @Nullable ClientLevel level,
+                                                         @Nullable LivingEntity entity,
+                                                         int seed) {
+        if (entity instanceof BaseVillager villager && villager.isBobberDeployed()) {
+            return 1.0F;
+        }
+        return 0.0F;
+    }
+
+    private static void registerConfigScreen() {
+        ModContainer container = ModLoadingContext.get().getActiveContainer();
+        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+    }
+
+
+    @SubscribeEvent
+    public static void registerLayer(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        event.registerLayerDefinition(SettlementsVillagerModel.LAYER, SettlementsVillagerModel::createBodyLayer);
+        event.registerLayerDefinition(UmbrellaModel.LAYER, UmbrellaModel::createBodyLayer);
+        event.registerLayerDefinition(BallistaModel.LAYER, BallistaModel::createBodyLayer);
+        event.registerLayerDefinition(BallistaBoltModel.LAYER, BallistaBoltModel::createBodyLayer);
+    }
+
+    @SubscribeEvent
+    public static void registerBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(BlockEntityTypeRegistry.CULTIVATION_LILY.get(), CultivationLilyRenderer::new);
+        event.registerBlockEntityRenderer(BlockEntityTypeRegistry.BALLISTA.get(), BallistaRenderer::new);
+    }
+
+    @SubscribeEvent
+    public static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
+        event.register(CultivationLilyRenderer.FLOATING_MESH_MODEL);
+    }
+
+    @SubscribeEvent
+    public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(ParticleTypeRegistry.EGG_SPLAT.get(), EggSplatParticle.Provider::new);
+        event.registerSpriteSet(ParticleTypeRegistry.STUNNED_STAR.get(), StunnedStarParticle.Provider::new);
+        event.registerSpriteSet(ParticleTypeRegistry.ORB.get(), OrbParticle.Provider::new);
+        event.registerSpriteSet(ParticleTypeRegistry.SLEEPING_Z.get(), SleepingZParticle.Provider::new);
+    }
+
+    @SubscribeEvent
+    public static void registerGuiLayers(RegisterGuiLayersEvent event) {
+        event.registerAbove(VanillaGuiLayers.CROSSHAIR, ResourceLocationUtil.mod("hud"), ClientModEvents::renderHud);
+        event.registerAbove(VanillaGuiLayers.CROSSHAIR, ResourceLocationUtil.mod("clock_hud"), ClientModEvents::renderClockHud);
+
+        event.registerAbove(VanillaGuiLayers.BOSS_OVERLAY, ResourceLocationUtil.mod("settlement_arrival"), ClientModEvents::renderSettlementArrival);
+
+        if (DevTooling.isEnabled()) {
+            event.registerAbove(VanillaGuiLayers.CROSSHAIR, ResourceLocationUtil.mod("debug_tuning_overlay"),
+                    ClientModEvents::renderDebugTuningOverlay);
+        }
+    }
+
+    private static void renderHud(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        // Registered before the client Dagger graph exists, so the defensive accessor is required
+        ClientComponent clientComponent = SettlementsDagger.clientOrNull();
+        if (clientComponent == null) {
+            return;
+        }
+
+        clientComponent.crosshairHudRenderer().render(guiGraphics, deltaTracker);
+    }
+
+    private static void renderClockHud(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        ClientComponent clientComponent = SettlementsDagger.clientOrNull();
+        if (clientComponent == null) {
+            return;
+        }
+
+        clientComponent.clockHudRenderer().render(guiGraphics, deltaTracker);
+    }
+
+    private static void renderSettlementArrival(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        ClientComponent clientComponent = SettlementsDagger.clientOrNull();
+        if (clientComponent == null) {
+            return;
+        }
+
+        clientComponent.settlementArrivalHudRenderer().render(guiGraphics, deltaTracker);
+    }
+
+    private static void renderDebugTuningOverlay(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        ClientComponent clientComponent = SettlementsDagger.clientOrNull();
+        if (clientComponent == null) {
+            return;
+        }
+
+        clientComponent.debugTuningHudRenderer().render(guiGraphics, deltaTracker);
+    }
+
+}

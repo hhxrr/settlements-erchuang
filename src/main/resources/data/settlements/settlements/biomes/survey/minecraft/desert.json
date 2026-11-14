@@ -1,0 +1,9 @@
+{
+  "biome": "minecraft:desert",
+  "resource_densities": {
+    "ARID": 0.9
+  },
+  "template_tags": [
+    "desert"
+  ]
+}

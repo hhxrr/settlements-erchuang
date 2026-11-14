@@ -1,0 +1,87 @@
+package dev.breezes.settlements.bootstrap.registry.entities;
+
+import dev.breezes.settlements.SettlementsMod;
+import dev.breezes.settlements.infrastructure.minecraft.entities.cats.SettlementsCat;
+import dev.breezes.settlements.infrastructure.minecraft.entities.cuccos.CuccoEntity;
+import dev.breezes.settlements.infrastructure.minecraft.entities.projectiles.BallistaBolt;
+import dev.breezes.settlements.infrastructure.minecraft.entities.projectiles.SettlementsEgg;
+import dev.breezes.settlements.infrastructure.minecraft.entities.projectiles.VillagerFishingHook;
+import dev.breezes.settlements.infrastructure.minecraft.entities.transit.BusEntity;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import dev.breezes.settlements.infrastructure.minecraft.entities.wolves.SettlementsWolf;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+import java.util.function.Supplier;
+
+public class EntityRegistry {
+
+    public static final DeferredRegister<EntityType<?>> REGISTRY = DeferredRegister.create(BuiltInRegistries.ENTITY_TYPE, SettlementsMod.MOD_ID);
+
+    public static final Supplier<EntityType<BaseVillager>> BASE_VILLAGER = REGISTRY.register("base_villager",
+            () -> EntityType.Builder.of(BaseVillager::new, MobCategory.MISC)
+                    .sized(0.6F, 1.95F)
+                    .clientTrackingRange(10)
+                    .build("base_villager"));
+
+    public static final Supplier<EntityType<SettlementsWolf>> SETTLEMENTS_WOLF = REGISTRY.register("settlements_wolf",
+            () -> EntityType.Builder.of(SettlementsWolf::new, MobCategory.CREATURE)
+                    .sized(0.6F, 0.85F)
+                    .eyeHeight(0.68F)
+                    .passengerAttachments(new Vec3(0.0, 0.81875, -0.0625))
+                    .clientTrackingRange(10)
+                    .build("settlements_wolf"));
+
+    public static final Supplier<EntityType<SettlementsCat>> SETTLEMENTS_CAT = REGISTRY.register("settlements_cat",
+            () -> EntityType.Builder.of(SettlementsCat::new, MobCategory.CREATURE)
+                    .sized(0.6F, 0.7F)
+                    .eyeHeight(0.35F)
+                    .passengerAttachments(0.5125F)
+                    .clientTrackingRange(10)
+                    .build("settlements_cat"));
+
+    public static final Supplier<EntityType<CuccoEntity>> CUCCO = REGISTRY.register("cucco",
+            () -> EntityType.Builder.of(CuccoEntity::new, MobCategory.CREATURE)
+                    .sized(0.4F, 0.7F)
+                    .eyeHeight(0.644F)
+                    .clientTrackingRange(10)
+                    .build("cucco"));
+
+    public static final Supplier<EntityType<SettlementsEgg>> SETTLEMENTS_EGG = REGISTRY.register("settlements_egg",
+            () -> EntityType.Builder.<SettlementsEgg>of(SettlementsEgg::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(10)
+                    .build("settlements_egg"));
+
+    public static final Supplier<EntityType<VillagerFishingHook>> VILLAGER_FISHING_HOOK = REGISTRY.register("villager_fishing_hook",
+            () -> EntityType.Builder.<VillagerFishingHook>of(VillagerFishingHook::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(5)
+                    .noSave()
+                    .noSummon()
+                    .build("villager_fishing_hook"));
+
+    public static final Supplier<EntityType<BallistaBolt>> BALLISTA_BOLT = REGISTRY.register("ballista_bolt",
+            () -> EntityType.Builder.<BallistaBolt>of(BallistaBolt::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .clientTrackingRange(8)
+                    .updateInterval(20)
+                    .build("ballista_bolt"));
+
+    public static final Supplier<EntityType<BusEntity>> BUS = REGISTRY.register("bus",
+            () -> EntityType.Builder.<BusEntity>of(BusEntity::new, MobCategory.MISC)
+                    .sized(1.4F, 1.6F)
+                    .clientTrackingRange(10)
+                    .build("bus"));
+
+    public static void register(IEventBus eventBus) {
+        REGISTRY.register(eventBus);
+    }
+
+}

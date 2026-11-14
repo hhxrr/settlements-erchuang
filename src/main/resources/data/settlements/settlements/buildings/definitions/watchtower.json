@@ -1,0 +1,16 @@
+{
+  "id": "settlements:building_definitions/watchtower",
+  "placement_priority": 60,
+  "zone_tier_min": 4,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [],
+  "forbidden_resources": [],
+  "trait_affinities": {
+    "settlements:settlement_traits/defense": 0.7
+  },
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 7,
+  "footprint_depth": 7,
+  "npc_count": 0
+}

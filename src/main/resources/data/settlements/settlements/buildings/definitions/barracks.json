@@ -1,0 +1,16 @@
+{
+  "id": "settlements:building_definitions/barracks",
+  "placement_priority": 55,
+  "zone_tier_min": 3,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [],
+  "forbidden_resources": [],
+  "trait_affinities": {
+    "settlements:settlement_traits/defense": 0.8
+  },
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 13,
+  "footprint_depth": 13,
+  "npc_count": 0
+}

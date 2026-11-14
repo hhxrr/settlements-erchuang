@@ -1,0 +1,67 @@
+package dev.breezes.settlements.domain.world;
+
+import dev.breezes.settlements.domain.time.TimeOfDay;
+
+/**
+ * Calendar arithmetic for the Settlements mod's day cycle.
+ * <p>
+ * A calendar day spans midnight to midnight in real-world terms, regardless of when each
+ * villager wakes. Minecraft's tick-zero falls at 06:00 (dawn) rather than midnight, so a
+ * plain {@code dayTime / TICKS_PER_DAY} would put pre-dawn moments on the previous day —
+ * which desynchronizes early-wake professions from the rest of the village. This helper
+ * shifts the day boundary onto midnight so that, for example, a farmer waking at 04:30 and
+ * a librarian waking at 08:00 on the same morning share the same calendar day.
+ */
+public final class WorldCalendar {
+
+    /**
+     * The calendar days in one year.
+     */
+    // TODO: read the year length from the calendar's config once the villager lifecycle calendar exists, so years
+    //  agree between settlement history and villager ages
+    public static final int DAYS_PER_YEAR = 48;
+
+    /**
+     * Distance from midnight (MC tick 18 000) to the next MC-day boundary (MC tick 24 000 == 0).
+     * Adding this offset before dividing by {@link TimeOfDay#TICKS_PER_DAY} aligns the integer
+     * day boundary on midnight rather than dawn.
+     */
+    private static final int MIDNIGHT_OFFSET_FROM_DAWN = TimeOfDay.TICKS_PER_DAY - TimeOfDay.AT_00_00.getMinecraftTick();
+
+    /**
+     * Returns the calendar day containing the given absolute {@code dayTime}.
+     */
+    public static long calendarDayOf(long dayTime) {
+        return Math.floorDiv(dayTime + MIDNIGHT_OFFSET_FROM_DAWN, TimeOfDay.TICKS_PER_DAY);
+    }
+
+    /**
+     * Returns the absolute {@code dayTime} at which an in-MC-day tick of {@code tickInMcDay}
+     * occurs within the given {@code calendarDay}.
+     * <p>
+     * Pre-dawn ticks (>= midnight) sit in the trailing hours of the previous MC day, so their
+     * absolute tick is in MC day {@code calendarDay - 1}. Post-dawn ticks sit in MC day
+     * {@code calendarDay}. This is the inverse of {@link #calendarDayOf(long)}.
+     */
+    public static long absoluteTickFor(long calendarDay, int tickInMcDay) {
+        long mcDay = tickInMcDay >= TimeOfDay.AT_00_00.getMinecraftTick() ? calendarDay - 1 : calendarDay;
+        return mcDay * TimeOfDay.TICKS_PER_DAY + tickInMcDay;
+    }
+
+    /**
+     * Returns the absolute {@code dayTime} at which civil tick {@code civilTick} (0 = midnight)
+     * occurs within the given {@code calendarDay}.
+     */
+    public static long absoluteTickForCivil(long calendarDay, int civilTick) {
+        return calendarDay * TimeOfDay.TICKS_PER_DAY - MIDNIGHT_OFFSET_FROM_DAWN + civilTick;
+    }
+
+    /**
+     * Returns how far {@code dayTime} sits past {@code calendarDay}'s own midnight, DELIBERATELY
+     * left unbounded rather than {@code floorMod}-ped back into {@code [0, TICKS_PER_DAY)}.
+     */
+    public static int civilOffsetWithin(long calendarDay, long dayTime) {
+        return (int) (dayTime - absoluteTickForCivil(calendarDay, 0));
+    }
+
+}

@@ -1,0 +1,13 @@
+{
+  "id": "b3a00db3-e532-46da-8237-ce979aa27915",
+  "building_definition": "settlements:building_definitions/barracks",
+  "tags": [],
+  "authors": [
+    "breeze"
+  ],
+  "notes": "Generated placeholder structure metadata.",
+  "width": 13,
+  "depth": 13,
+  "height": 8,
+  "min_minecraft_version": "1.21.1"
+}

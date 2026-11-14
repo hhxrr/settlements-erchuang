@@ -1,0 +1,31 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "settlements:font/right_click.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\uE000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "settlements:font/shift.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\uE001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "settlements:font/middle_click.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\uE002"
+      ]
+    }
+  ]
+}

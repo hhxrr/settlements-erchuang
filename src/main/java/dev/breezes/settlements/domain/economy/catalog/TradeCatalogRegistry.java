@@ -1,0 +1,59 @@
+package dev.breezes.settlements.domain.economy.catalog;
+
+import dev.breezes.settlements.domain.entities.VillagerProfessionKey;
+
+import javax.annotation.Nonnull;
+import java.util.List;
+
+/**
+ * Each profession's stock policies, and the entries projected from them. A profession's policies include the policies
+ * every profession shares, beneath its own: its own policy replaces a shared policy with the same id, and a profession
+ * with no catalog of its own has the shared policies alone.
+ */
+public interface TradeCatalogRegistry {
+
+    /**
+     * Returns the source stock policies for the given profession. These are the canonical economic
+     * rules; demand, offer, and supply entries are projections over these policies.
+     */
+    List<StockPolicy> stockPoliciesFor(@Nonnull VillagerProfessionKey profession);
+
+    /**
+     * Returns all sellable entries for the given seller's profession that could potentially satisfy
+     * the buyer's want. Mixed-kind pairs (ItemRef vs. Tag want, or TagRef vs. Item want) are included
+     * as candidates and sorted by specificity -- exact-kind matches first.
+     *
+     * @param sellerProfession the profession of the villager who would be selling
+     * @param buyerWant        what the prospective buyer is looking for
+     */
+    List<OfferEntry> findOffers(@Nonnull VillagerProfessionKey sellerProfession, @Nonnull ItemMatch want);
+
+    /**
+     * Returns all buyable entries for the given buyer's profession that could potentially match
+     * the specified want, sorted by specificity.
+     *
+     * @param buyerProfession the profession of the villager who would be buying
+     * @param buyerWant       what the buyer wants to acquire
+     */
+    List<DemandEntry> findDemands(@Nonnull VillagerProfessionKey buyerProfession, @Nonnull ItemMatch want);
+
+    /**
+     * Returns all sellable entries registered for the given profession, with no want-key filtering.
+     * Prefer {@link #findOffers} when you have a concrete buyer want. Use this method when you
+     * need the full unfiltered catalog for a profession (e.g., display or bulk validation).
+     */
+    List<OfferEntry> offersFor(@Nonnull VillagerProfessionKey profession);
+
+    /**
+     * Returns all buyable entries registered for the given profession, with no want-key filtering.
+     * Prefer {@link #findDemands} when you have a concrete want. Use this method when the caller
+     * needs the full unfiltered catalog for presentation or validation.
+     */
+    List<DemandEntry> demandsFor(@Nonnull VillagerProfessionKey profession);
+
+    /**
+     * Returns all dumpable entries registered for the given profession, with no filtering.
+     */
+    List<SupplyEntry> supplyFor(@Nonnull VillagerProfessionKey profession);
+
+}

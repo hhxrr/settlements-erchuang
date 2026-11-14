@@ -1,0 +1,13 @@
+{
+  "id": "ae39d233-2f2d-4847-8469-f791bf286453",
+  "building_definition": "settlements:building_definitions/house",
+  "tags": [],
+  "authors": [
+    "breeze"
+  ],
+  "notes": "Generated placeholder structure metadata.",
+  "width": 9,
+  "depth": 9,
+  "height": 8,
+  "min_minecraft_version": "1.21.1"
+}

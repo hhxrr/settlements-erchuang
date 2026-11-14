@@ -1,0 +1,178 @@
+{
+  "profession": "minecraft:shepherd",
+  "stock": [
+    {
+      "id": "needs_shears",
+      "match": {
+        "item": "minecraft:shears"
+      },
+      "restock": {
+        "below": 1,
+        "buyPricePerUnit": 12,
+        "priority": 80
+      }
+    },
+    {
+      "id": "feed_wheat",
+      "match": {
+        "item": "minecraft:wheat"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 1,
+        "priority": 50
+      }
+    },
+    {
+      "id": "dyes",
+      "match": {
+        "tag": "c:dyes"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 30
+      },
+      "dump": {
+        "above": 32
+      }
+    },
+    {
+      "id": "scavenged_dandelion",
+      "match": {
+        "item": "minecraft:dandelion"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 1,
+        "priority": 20
+      }
+    },
+    {
+      "id": "scavenged_poppy",
+      "match": {
+        "item": "minecraft:poppy"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 1,
+        "priority": 20
+      }
+    },
+    {
+      "id": "scavenged_cornflower",
+      "match": {
+        "item": "minecraft:cornflower"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 1,
+        "priority": 20
+      }
+    },
+    {
+      "id": "scavenged_azure_bluet",
+      "match": {
+        "item": "minecraft:azure_bluet"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 1,
+        "priority": 20
+      }
+    },
+    {
+      "id": "needs_bucket",
+      "match": {
+        "item": "minecraft:bucket"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 5,
+        "priority": 40
+      }
+    },
+    {
+      "id": "wolf_bone",
+      "match": {
+        "item": "minecraft:bone"
+      },
+      "restock": {
+        "below": 4,
+        "buyPricePerUnit": 2,
+        "priority": 30
+      }
+    },
+    {
+      "id": "wolf_beef",
+      "match": {
+        "item": "minecraft:beef"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 3,
+        "priority": 20
+      }
+    },
+    {
+      "id": "wool",
+      "match": {
+        "tag": "c:wools"
+      },
+      "offer": {
+        "above": 16,
+        "basePrice": 16,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "string",
+      "match": {
+        "item": "minecraft:string"
+      },
+      "offer": {
+        "above": 16,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "white_bed",
+      "match": {
+        "item": "minecraft:white_bed"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 4,
+        "priceJitter": 2,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "white_carpet",
+      "match": {
+        "item": "minecraft:white_carpet"
+      },
+      "offer": {
+        "above": 16,
+        "basePrice": 2,
+        "priceJitter": 0,
+        "bundleSize": 4
+      },
+      "dump": {
+        "above": 128
+      }
+    }
+  ]
+}

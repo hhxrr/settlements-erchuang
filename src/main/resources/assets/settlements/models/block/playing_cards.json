@@ -1,0 +1,106 @@
+{
+  "textures": {
+    "card": "minecraft:block/white_concrete",
+    "back": "minecraft:block/red_concrete",
+    "face": "minecraft:block/quartz_block",
+    "particle": "minecraft:block/white_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        2,
+        0,
+        4
+      ],
+      "to": [
+        7,
+        0.5,
+        11
+      ],
+      "faces": {
+        "down": {
+          "texture": "#back"
+        },
+        "up": {
+          "texture": "#face"
+        },
+        "north": {
+          "texture": "#card"
+        },
+        "south": {
+          "texture": "#card"
+        },
+        "west": {
+          "texture": "#card"
+        },
+        "east": {
+          "texture": "#card"
+        }
+      }
+    },
+    {
+      "from": [
+        6,
+        0.5,
+        3
+      ],
+      "to": [
+        11,
+        1,
+        10
+      ],
+      "faces": {
+        "down": {
+          "texture": "#back"
+        },
+        "up": {
+          "texture": "#face"
+        },
+        "north": {
+          "texture": "#card"
+        },
+        "south": {
+          "texture": "#card"
+        },
+        "west": {
+          "texture": "#card"
+        },
+        "east": {
+          "texture": "#card"
+        }
+      }
+    },
+    {
+      "from": [
+        9,
+        1,
+        5
+      ],
+      "to": [
+        14,
+        1.5,
+        12
+      ],
+      "faces": {
+        "down": {
+          "texture": "#back"
+        },
+        "up": {
+          "texture": "#face"
+        },
+        "north": {
+          "texture": "#card"
+        },
+        "south": {
+          "texture": "#card"
+        },
+        "west": {
+          "texture": "#card"
+        },
+        "east": {
+          "texture": "#card"
+        }
+      }
+    }
+  ]
+}

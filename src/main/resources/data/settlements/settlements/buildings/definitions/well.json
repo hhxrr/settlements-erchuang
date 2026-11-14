@@ -1,0 +1,14 @@
+{
+  "id": "settlements:building_definitions/well",
+  "placement_priority": 30,
+  "zone_tier_min": 2,
+  "zone_tier_max": 4,
+  "requires_road_frontage": false,
+  "requires_resources": [],
+  "forbidden_resources": [],
+  "trait_affinities": {},
+  "minimum_rank": "FLAVOR",
+  "footprint_width": 5,
+  "footprint_depth": 5,
+  "npc_count": 0
+}

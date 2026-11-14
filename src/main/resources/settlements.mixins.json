@@ -1,0 +1,26 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.breezes.settlements.infrastructure.minecraft.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockDisplayMixin",
+    "DisplayEntityMixin",
+    "ArmorStandMixin",
+    "ItemDisplayMixin",
+    "CatMixin",
+    "WolfMixin",
+    "VillagerMixin",
+    "LevelMixin",
+    "EntityMixin",
+    "AbstractArrowInvoker",
+    "RaidMixin"
+  ],
+  "client": [
+  ],
+  "server": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

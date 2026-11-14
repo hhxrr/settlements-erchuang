@@ -1,0 +1,154 @@
+{
+  "profession": "minecraft:cleric",
+  "stock": [
+    {
+      "id": "buy_sugar",
+      "match": {
+        "item": "minecraft:sugar"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 2,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_blaze",
+      "match": {
+        "item": "minecraft:blaze_powder"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 4,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_sand",
+      "match": {
+        "item": "minecraft:sand"
+      },
+      "restock": {
+        "below": 32,
+        "buyPricePerUnit": 1,
+        "priority": 40
+      }
+    },
+    {
+      "id": "buy_redstone",
+      "match": {
+        "item": "minecraft:redstone"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 30
+      }
+    },
+    {
+      "id": "buy_glowstone",
+      "match": {
+        "item": "minecraft:glowstone_dust"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 3,
+        "priority": 30
+      }
+    },
+    {
+      "id": "nether_wart",
+      "match": {
+        "item": "minecraft:nether_wart"
+      },
+      "restock": {
+        "below": 8,
+        "buyPricePerUnit": 2,
+        "priority": 30
+      },
+      "offer": {
+        "above": 16,
+        "basePrice": 16,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "glass_bottle",
+      "match": {
+        "item": "minecraft:glass_bottle"
+      },
+      "restock": {
+        "below": 16,
+        "buyPricePerUnit": 1,
+        "priority": 40
+      },
+      "offer": {
+        "above": 32,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "glass",
+      "match": {
+        "item": "minecraft:glass"
+      },
+      "offer": {
+        "above": 16,
+        "basePrice": 8,
+        "priceJitter": 1,
+        "bundleSize": 8
+      },
+      "dump": {
+        "above": 128
+      }
+    },
+    {
+      "id": "ender_pearl",
+      "match": {
+        "item": "minecraft:ender_pearl"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 5,
+        "priceJitter": 1,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "golden_apple",
+      "match": {
+        "item": "minecraft:golden_apple"
+      },
+      "offer": {
+        "above": 2,
+        "basePrice": 16,
+        "priceJitter": 4,
+        "bundleSize": 1
+      },
+      "dump": {
+        "above": 16
+      }
+    },
+    {
+      "id": "soul_lantern",
+      "match": {
+        "item": "minecraft:soul_lantern"
+      },
+      "dump": {
+        "above": 1
+      }
+    }
+  ]
+}

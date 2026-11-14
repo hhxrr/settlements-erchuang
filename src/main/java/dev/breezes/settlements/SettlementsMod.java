@@ -1,0 +1,77 @@
+package dev.breezes.settlements;
+
+import dev.breezes.settlements.bootstrap.event.BuildTradeEvents;
+import dev.breezes.settlements.bootstrap.registry.activities.ActivityRegistry;
+import dev.breezes.settlements.bootstrap.registry.attachments.AttachmentRegistry;
+import dev.breezes.settlements.bootstrap.registry.blockentities.BlockEntityTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.blocks.BlockRegistry;
+import dev.breezes.settlements.bootstrap.registry.components.DataComponentRegistry;
+import dev.breezes.settlements.bootstrap.registry.effects.MobEffectRegistry;
+import dev.breezes.settlements.bootstrap.registry.entities.EntityRegistry;
+import dev.breezes.settlements.bootstrap.registry.items.ItemRegistry;
+import dev.breezes.settlements.bootstrap.registry.professions.ProfessionRegistry;
+import dev.breezes.settlements.bootstrap.registry.memory.MemoryModuleTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.particles.ParticleTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.poi.PoiTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.schedules.ScheduleRegistry;
+import dev.breezes.settlements.bootstrap.registry.sensors.SensorTypeRegistry;
+import dev.breezes.settlements.bootstrap.registry.sounds.SoundEventRegistry;
+import dev.breezes.settlements.bootstrap.registry.structures.StructureRegistry;
+import dev.breezes.settlements.bootstrap.registry.tabs.CreativeTabRegistry;
+import dev.breezes.settlements.infrastructure.config.annotations.ConfigAnnotationProcessor;
+import dev.breezes.settlements.infrastructure.logging.LoggingConfig;
+import dev.breezes.settlements.infrastructure.network.core.PacketRegistry;
+import dev.breezes.settlements.shared.logging.LoggerFactory;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+
+import javax.annotation.Nonnull;
+
+@Mod(SettlementsMod.MOD_ID)
+public final class SettlementsMod {
+
+    public static final String MOD_ID = "settlements";
+    public static final String MOD_NAME = "Settlements";
+
+    public SettlementsMod(IEventBus modEventBus, ModContainer container) {
+        // Register logging policy first so later initialization paths can follow the logging policies
+        LoggingConfig loggingConfig = ConfigAnnotationProcessor.registerStartupConfig(container, LoggingConfig.class);
+        LoggerFactory.installPolicy(loggingConfig.toPolicy());
+
+        // Link our registries to the mod event bus
+        ItemRegistry.register(modEventBus);
+        BlockRegistry.register(modEventBus);
+        BlockEntityTypeRegistry.register(modEventBus);
+        CreativeTabRegistry.register(modEventBus);
+        EntityRegistry.register(modEventBus);
+        ParticleTypeRegistry.register(modEventBus);
+        DataComponentRegistry.register(modEventBus);
+        MobEffectRegistry.register(modEventBus);
+        AttachmentRegistry.register(modEventBus);
+        MemoryModuleTypeRegistry.register(modEventBus);
+        SensorTypeRegistry.register(modEventBus);
+        SoundEventRegistry.register(modEventBus);
+        StructureRegistry.register(modEventBus);
+        ActivityRegistry.register(modEventBus);
+        ScheduleRegistry.register(modEventBus);
+
+        // 机械动力整合包：新增职业的工作站方块 POI 注册（BlockRegistry 已在上文注册）
+        PoiTypeRegistry.register(modEventBus);
+
+        // 机械动力整合包：新增职业注册 + 交易菜单接入
+        ProfessionRegistry.register(modEventBus);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(BuildTradeEvents::onVillagerTrades);
+
+        processAnnotations(modEventBus);
+    }
+
+    private void processAnnotations(@Nonnull IEventBus modEventBus) {
+        // Generate configuration files from annotations
+        ConfigAnnotationProcessor.process();
+
+        // Bind packet handlers from annotations
+        modEventBus.addListener(PacketRegistry::bindPacketHandlers);
+    }
+
+}

@@ -1,0 +1,306 @@
+package dev.breezes.settlements.application.ai.behavior.usecases.villager.enchanting;
+
+import dev.breezes.settlements.application.ai.behavior.runtime.BehaviorSupport;
+import dev.breezes.settlements.application.ai.behavior.runtime.VillagerStateMachineBehavior;
+import dev.breezes.settlements.application.ai.behavior.workflow.staged.StagedStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.BehaviorContext;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.BehaviorStateType;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.outcomes.BehaviorOutcome;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.targets.TargetState;
+import dev.breezes.settlements.application.ai.behavior.workflow.state.registry.targets.Targetable;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.BehaviorStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.StageKey;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.StepResult;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.TimeBasedStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.concrete.NavigateToTargetStep;
+import dev.breezes.settlements.application.ai.behavior.workflow.steps.concrete.StayCloseStep;
+import dev.breezes.settlements.application.enchanting.engine.EnchantmentEngine;
+import dev.breezes.settlements.bootstrap.registry.components.DataComponentRegistry;
+import dev.breezes.settlements.bootstrap.registry.particles.ParticleRegistry;
+import dev.breezes.settlements.domain.ai.conditions.ICondition;
+import dev.breezes.settlements.domain.ai.conditions.NearbyBlockExistsCondition;
+import dev.breezes.settlements.domain.ai.navigation.NavigationType;
+import dev.breezes.settlements.domain.ai.worldevent.WorldEventType;
+import dev.breezes.settlements.domain.enchanting.SpecializationProfile;
+import dev.breezes.settlements.domain.entities.Expertise;
+import dev.breezes.settlements.domain.genetics.GeneType;
+import dev.breezes.settlements.domain.inventory.VillagerInventory;
+import dev.breezes.settlements.domain.time.ClockTicks;
+import dev.breezes.settlements.domain.time.ITickable;
+import dev.breezes.settlements.domain.world.blocks.PhysicalBlock;
+import dev.breezes.settlements.domain.world.location.Location;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import dev.breezes.settlements.infrastructure.rendering.particles.EnchantTier;
+import dev.breezes.settlements.shared.logging.levels.LogLevel;
+import lombok.CustomLog;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.EnchantingTableBlock;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@CustomLog(topic = "behavior")
+public class EnchantItemBehavior extends VillagerStateMachineBehavior {
+
+    private enum EnchantStage implements StageKey {
+        ENCHANT_ITEM,
+        END
+    }
+
+    private static final double CLOSE_ENOUGH_DISTANCE = 2.0;
+    private static final int MAX_BOOKSHELF_COUNT = 15;
+    private static final int ORB_EMISSION_GRANULARITY_TICKS = 2;
+
+    private final EnchantItemConfig config;
+    private final NearbyBlockExistsCondition<BaseVillager> nearbyEnchantingTableCondition;
+    private final EnchantmentEngine enchantmentEngine;
+
+    @Nullable
+    private BlockPos enchantingTablePos;
+    @Nullable
+    private ItemStack targetRepresentative;
+    @Nullable
+    private EnchantTier enchantTier;
+
+    public EnchantItemBehavior(@Nonnull EnchantItemConfig config,
+                               @Nonnull BehaviorSupport support,
+                               @Nonnull EnchantmentEngine enchantmentEngine) {
+        super(log, config.createPreconditionCheckCooldownTickable(), config.createBehaviorCooldownTickable(), support,
+                config.experienceReward());
+
+        this.config = config;
+
+        this.nearbyEnchantingTableCondition = new NearbyBlockExistsCondition<>(
+                config.scanRangeHorizontal(),
+                config.scanRangeVertical(),
+                Blocks.ENCHANTING_TABLE,
+                null,
+                1);
+        this.preconditions.add(ICondition.named("HasEnchantableNonEnchantedItem", this::hasEnchantableNonEnchantedItem));
+        this.preconditions.add(this.nearbyEnchantingTableCondition);
+        this.enchantmentEngine = enchantmentEngine;
+
+        this.enchantingTablePos = null;
+        this.targetRepresentative = null;
+        this.enchantTier = null;
+
+        this.initializeStateMachine(this.createControlStep(), EnchantStage.END);
+    }
+
+    protected StagedStep<BaseVillager> createControlStep() {
+        return StagedStep.<BaseVillager>builder()
+                .name("EnchantItemBehavior")
+                .initialStage(EnchantStage.ENCHANT_ITEM)
+                .stageStepMap(Map.of(EnchantStage.ENCHANT_ITEM, this.createEnchantStep()))
+                .nextStage(EnchantStage.END)
+                .build();
+    }
+
+    private BehaviorStep<BaseVillager> createEnchantStep() {
+        // Hoisted so the orb-emission gate can read the same elapsed-tick count the step schedules on
+        ITickable actionTickable = ClockTicks.seconds(10).asTickable();
+
+        TimeBasedStep<BaseVillager> actionStep = TimeBasedStep.<BaseVillager>builder()
+                .withTickable(actionTickable)
+                .addPeriodicStep(ClockTicks.of(10).getTicksAsInt(), this::emitAmbianceParticles)
+                .addPeriodicStep(ORB_EMISSION_GRANULARITY_TICKS, context -> this.emitTierOrbPulse(context, actionTickable))
+                .addKeyFrame(ClockTicks.seconds(8), this::playRevealSound)
+                .onEnd(context -> StepResult.complete())
+                .build();
+
+        return StayCloseStep.<BaseVillager>builder()
+                .closeEnoughDistance(CLOSE_ENOUGH_DISTANCE)
+                .navigateStep(new NavigateToTargetStep<>(NavigationType.WALK, 1))
+                .actionStep(actionStep)
+                .build();
+    }
+
+    private StepResult emitAmbianceParticles(@Nonnull BehaviorContext<BaseVillager> context) {
+        if (this.enchantingTablePos == null) {
+            return StepResult.noOp();
+        }
+
+        Location targetLocation = Location.of(this.enchantingTablePos, context.getInitiator().getMinecraftEntity().level())
+                .center(false);
+        targetLocation.displayParticles(ParticleTypes.ENCHANT, 50, 2, 1, 2, 1);
+        targetLocation.displayParticles(ParticleTypes.PORTAL, 3, 2, 1, 2, 1);
+        ParticleRegistry.displayCircle(ParticleTypes.END_ROD, targetLocation.add(0, -0.2, 0, true), 1.25, 16);
+        return StepResult.noOp();
+    }
+
+    /**
+     * Emits a single rising orb on the beats matching this run's tier cadence.
+     */
+    private StepResult emitTierOrbPulse(@Nonnull BehaviorContext<BaseVillager> context, @Nonnull ITickable actionTickable) {
+        if (this.enchantTier == null || this.enchantingTablePos == null) {
+            return StepResult.noOp();
+        }
+        if (actionTickable.getTicksElapsedRounded() % this.enchantTier.getEmitIntervalTicks() != 0) {
+            return StepResult.noOp();
+        }
+
+        Location targetLocation = Location.of(this.enchantingTablePos, context.getInitiator().getMinecraftEntity().level())
+                .center(false);
+        ParticleRegistry.enchantTierOrbs(targetLocation, this.enchantTier);
+        return StepResult.noOp();
+    }
+
+    @Override
+    protected void onBehaviorStart(@Nonnull Level world,
+                                   @Nonnull BaseVillager entity,
+                                   @Nonnull BehaviorContext<BaseVillager> context) {
+        this.enchantingTablePos = this.nearbyEnchantingTableCondition.getTargets().getFirst();
+        if (this.enchantingTablePos == null) {
+            this.requestStop("Unable to find enchanting table position");
+            return;
+        }
+
+        this.targetRepresentative = this.findFirstEnchantableNonEnchantedRepresentative(entity.getSettlementsInventory()).orElse(null);
+        if (this.targetRepresentative == null) {
+            this.requestStop("No enchantable non-enchanted item found");
+            return;
+        }
+
+        // Resolve and commit the enchant up front so the result tier is known for the entire
+        // animation, and so an interrupted session never leaves a half-enchanted state
+        if (!this.transactEnchant(world, entity, context)) {
+            return;
+        }
+
+        context.setState(BehaviorStateType.TARGET, TargetState.of(Targetable.fromBlock(
+                PhysicalBlock.of(Location.of(this.enchantingTablePos, world), world.getBlockState(this.enchantingTablePos)))));
+    }
+
+    @Override
+    protected boolean preTickGuard(int delta,
+                                   @Nonnull Level world,
+                                   @Nonnull BaseVillager entity,
+                                   @Nonnull BehaviorContext<BaseVillager> context) {
+        if (this.enchantingTablePos == null || !(world.getBlockState(this.enchantingTablePos).is(Blocks.ENCHANTING_TABLE))) {
+            log.debug("Enchanting table at {} is gone", this.enchantingTablePos);
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    protected void onBehaviorStop(@Nonnull Level world,
+                                  @Nonnull BaseVillager entity) {
+        entity.getNavigationManager().stop();
+        entity.clearHeldItem();
+        this.enchantingTablePos = null;
+        this.targetRepresentative = null;
+        this.enchantTier = null;
+    }
+
+    /**
+     * Computes the enchant result and commits it to the inventory in a single up-front step, also
+     * caching the resulting {@link EnchantTier} for the animation. Returns {@code false} (and stops
+     * the behavior) when the target item can no longer be consumed.
+     */
+    private boolean transactEnchant(@Nonnull Level world,
+                                    @Nonnull BaseVillager entity,
+                                    @Nonnull BehaviorContext<BaseVillager> context) {
+        if (this.enchantingTablePos == null || this.targetRepresentative == null) {
+            this.requestStop("Enchanting setup or target is invalid");
+            return false;
+        }
+
+        VillagerInventory inventory = entity.getSettlementsInventory();
+        Expertise expertise = entity.getExpertise();
+        double intelligence = entity.getGenetics().getGeneValue(GeneType.INTELLIGENCE);
+        int bookshelfCount = this.countNearbyBookshelves(world, this.enchantingTablePos);
+        SpecializationProfile specialization = null; // TODO: implement specialization
+
+        ItemStack enchantedItem = this.enchantmentEngine.enchant(this.targetRepresentative, expertise, intelligence, bookshelfCount,
+                specialization, world.registryAccess());
+
+        if (inventory.consume(this.targetRepresentative, 1) != 1) {
+            log.warn("Failed to enchant {}: the item cannot be consumed from the inventory", this.targetRepresentative);
+            this.requestStop("Failed to enchant item because item cannot be consumed");
+            return false;
+        }
+
+        inventory.add(enchantedItem);
+        this.enchantTier = EnchantTier.classify(enchantedItem);
+        if (log.isEnabled(LogLevel.DEBUG)) {
+            // A holder's toString prints the enchantment's whole definition, so the ids and levels are built here
+            String enchantments = EnchantmentHelper.getEnchantmentsForCrafting(enchantedItem).entrySet().stream()
+                    .map(entry -> entry.getKey().getRegisteredName() + " " + entry.getIntValue())
+                    .collect(Collectors.joining(", "));
+            log.debug("Enchanted {} into {} with [{}] (tier {})", this.targetRepresentative.getItem(),
+                    enchantedItem.getItem(), enchantments, this.enchantTier);
+        }
+
+        BehaviorOutcome outcome = BehaviorOutcome.forDeed(WorldEventType.ITEM_ENCHANTED, null);
+        outcome.markSucceeded();
+        outcome.recordDeedDetail(enchantedItem.getItem().toString());
+        outcome.putDetailField("item", BuiltInRegistries.ITEM.getKey(enchantedItem.getItem()).getPath());
+        context.declarePrimaryDeed(outcome);
+
+        this.rewardExperience(entity);
+        return true;
+    }
+
+    private StepResult playRevealSound(@Nonnull BehaviorContext<BaseVillager> context) {
+        if (this.enchantingTablePos == null || this.enchantTier == null) {
+            return StepResult.noOp();
+        }
+
+        Level world = context.getInitiator().getMinecraftEntity().level();
+        world.playSound(null, this.enchantingTablePos, SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 1.0f, 1.0f);
+        return StepResult.noOp();
+    }
+
+    private boolean hasEnchantableNonEnchantedItem(@Nullable BaseVillager villager) {
+        if (villager == null) {
+            return false;
+        }
+        return this.findFirstEnchantableNonEnchantedRepresentative(villager.getSettlementsInventory()).isPresent();
+    }
+
+    private Optional<ItemStack> findFirstEnchantableNonEnchantedRepresentative(@Nonnull VillagerInventory inventory) {
+        return inventory.findFirst(stack -> !stack.getOrDefault(DataComponentRegistry.VILLAGER_ENCHANT_ATTEMPTED.get(), false)
+                && (stack.isEnchantable() || stack.is(Items.BOOK)));
+    }
+
+    private int countNearbyBookshelves(@Nonnull Level world,
+                                       @Nonnull BlockPos enchantingTablePosition) {
+        int count = 0;
+
+        for (BlockPos offset : EnchantingTableBlock.BOOKSHELF_OFFSETS) {
+            if (count >= MAX_BOOKSHELF_COUNT) {
+                return MAX_BOOKSHELF_COUNT;
+            }
+
+            BlockPos bookshelfPos = enchantingTablePosition.offset(offset);
+            if (!world.getBlockState(bookshelfPos).is(Blocks.BOOKSHELF)) {
+                continue;
+            }
+
+            // Check if anything is blocking the bookshelf
+            BlockPos middlePos = enchantingTablePosition.offset(offset.getX() / 2, offset.getY(), offset.getZ() / 2);
+            if (!world.getBlockState(middlePos).isAir()) {
+                continue;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+}

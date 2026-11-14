@@ -1,0 +1,83 @@
+package dev.breezes.settlements.bootstrap.registry.sounds;
+
+import dev.breezes.settlements.domain.world.location.Location;
+import dev.breezes.settlements.infrastructure.audio.IPlayable;
+import dev.breezes.settlements.infrastructure.audio.PitchedPlayable;
+import dev.breezes.settlements.infrastructure.audio.SoundEventPlayable;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+
+import javax.annotation.Nonnull;
+import java.util.Optional;
+
+@AllArgsConstructor
+@Getter
+public enum SoundRegistry {
+
+    // TODO: we might want to account for chained sounds -- i.e. multiple sounds playing in sequence, such as notes
+
+    REPAIR_IRON_GOLEM(SoundEventPlayable.of(SoundEvents.IRON_GOLEM_REPAIR, 1.0F, 1F)),
+    SUMMON_IRON_GOLEM(SoundEventPlayable.of(SoundEvents.ANVIL_LAND, 1.0F, 0.5F)),
+    FEED_ANIMAL(SoundEventPlayable.of(SoundEvents.GENERIC_EAT, 1.0F, 1F)),
+    THROW_POTION(SoundEventPlayable.of(SoundEvents.SPLASH_POTION_THROW, 1.0f, 1f)),
+    STONE_CUTTER_WORKING(SoundEventPlayable.of(SoundEvents.VILLAGER_WORK_MASON, 0.3f, 2f)),
+    ITEM_POP_IN(SoundEventPlayable.of(SoundEvents.ITEM_PICKUP, 0.3f, 0.8f)),
+    ITEM_POP_OUT(SoundEventPlayable.of(SoundEvents.ITEM_PICKUP, 0.3f, 1.2f)),
+    SHEAR_SHEEP(SoundEventPlayable.of(SoundEvents.SHEEP_SHEAR, 1.0f, 1.0f)),
+    COLLECT_HONEY(SoundEventPlayable.of(SoundEvents.BOTTLE_FILL, 1.0f, 1.0f)),
+    HARVEST_HONEYCOMB(SoundEventPlayable.of(SoundEvents.BEEHIVE_SHEAR, 0.8f, 1.2f)),
+    MILK_COW(SoundEventPlayable.of(SoundEvents.COW_MILK, 1.0f, 1.0f)),
+    FISHING_CAST(SoundEventPlayable.of(SoundEvents.FISHING_BOBBER_THROW, 0.5f, 0.4f)),
+    FISHING_SPLASH(SoundEventPlayable.of(SoundEvents.FISHING_BOBBER_SPLASH, 0.25f, 1.0f)),
+    FISHING_REEL(SoundEventPlayable.of(SoundEvents.FISHING_BOBBER_RETRIEVE, 1.0f, 1.0f)),
+    MAP_FLAP(SoundEventPlayable.of(SoundEvents.BOOK_PAGE_TURN, 1.0f, 0.8f)),
+    MAP_SCRIBBLE(SoundEventPlayable.of(SoundEvents.UI_CARTOGRAPHY_TABLE_TAKE_RESULT, 1.0f, 1.3f)),
+    MANAGE_CHEST(SoundEventPlayable.of(SoundEvents.CHEST_OPEN, 0.8f, 1.0f)),
+    THROW_EGG(SoundEventPlayable.of(SoundEvents.EGG_THROW, 1.0f, 1.2f)),
+    BLAST_MISFIRE(SoundEventPlayable.of(SoundEvents.GENERIC_EXPLODE.value(), 0.8f, 1.4f)),
+    CUCCO_CALL(SoundEventPlayable.ofLazy(SoundEventRegistry.CUCCO_CALL, 0.8f, 1.0f)),
+    CUCCO_FALL(SoundEventPlayable.ofLazy(SoundEventRegistry.CUCCO_FALL, 0.5f, 1.0f)),
+    WOLOLO(SoundEventPlayable.ofLazy(SoundEventRegistry.WOLOLO, 1.0f, 1.0f)),
+    INTERACTION_FAIL(SoundEventPlayable.ofLazy(SoundEventRegistry.INTERACTION_FAIL, 1.0f, 1.0f)),
+    CULTIVATION_LILY_RESIZE(SoundEventPlayable.of(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.6f, 1.0f)),
+    CULTIVATION_LILY_FILTER_SET(SoundEventPlayable.of(SoundEvents.ITEM_FRAME_ADD_ITEM, 1.0f, 1.0f)),
+    CULTIVATION_LILY_FILTER_CLEARED(SoundEventPlayable.of(SoundEvents.ITEM_FRAME_REMOVE_ITEM, 1.0f, 1.0f)),
+    CULTIVATION_LILY_FILTER_ALREADY_CLEARED(SoundEventPlayable.of(SoundEvents.ITEM_FRAME_BREAK, 1.0f, 1.0f)),
+    BALLISTA_WIND_STROKE(SoundEventPlayable.of(SoundEvents.CROSSBOW_LOADING_MIDDLE.value(), 1.0f, 0.6f)),
+    BALLISTA_WIND_CATCH(SoundEventPlayable.of(SoundEvents.LEVER_CLICK, 0.5f, 0.8f)),
+    BALLISTA_COCKED(SoundEventPlayable.of(SoundEvents.CROSSBOW_LOADING_END.value(), 1.0f, 0.7f)),
+    BALLISTA_RELEASE(SoundEventPlayable.of(SoundEvents.CROSSBOW_SHOOT, 1.0f, 0.5f)),
+    BALLISTA_TURN_ARRIVES(SoundEventPlayable.of(SoundEvents.IRON_TRAPDOOR_CLOSE, 0.5f, 0.8f)),
+    ;
+
+    // TODO: this might not be just a vanilla sound, but a custom/modded sound
+    private final IPlayable playable;
+
+    public void playGlobally(@Nonnull Location location, @Nonnull SoundSource soundSource) {
+        this.playable.playGlobally(location, soundSource);
+    }
+
+    /**
+     * See {@link IPlayable#playLocally}.
+     */
+    public void playLocally(@Nonnull Location location, @Nonnull SoundSource soundSource) {
+        this.playable.playLocally(location, soundSource);
+    }
+
+    /**
+     * The pitch-override capability for this constant, present only when its {@link IPlayable} is
+     * also a {@link PitchedPlayable}. Absence here is what keeps a constant that never opted into a
+     * pitch override from exposing one at all, rather than exposing it uniformly and failing only the
+     * constants that never opted in.
+     */
+    public Optional<PitchedPlayable> pitchedPlayable() {
+        return this.playable instanceof PitchedPlayable pitched ? Optional.of(pitched) : Optional.empty();
+    }
+
+    public void playPrivately() {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+}

@@ -1,0 +1,118 @@
+package dev.breezes.settlements.bootstrap.registry.particles;
+
+import dev.breezes.settlements.domain.world.location.Location;
+import dev.breezes.settlements.infrastructure.rendering.particles.EnchantTier;
+import dev.breezes.settlements.infrastructure.rendering.particles.OrbParticleOptions;
+import dev.breezes.settlements.shared.util.RandomUtil;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ItemParticleOption;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
+
+import javax.annotation.Nonnull;
+
+// TODO: we should turn this into a registry, not a utility class
+public class ParticleRegistry {
+
+    /*
+     * Preset particles
+     */
+    private static void itemBreak(@Nonnull Location location, @Nonnull ItemStack item, int count, double dx, double dy, double dz, double speed) {
+        location.displayParticles(new ItemParticleOption(ParticleTypes.ITEM, item), count, dx, dy, dz, speed);
+    }
+
+    private static void blockCrack(@Nonnull Location location, @Nonnull BlockState state, int count, double dx, double dy, double dz, double speed) {
+        location.displayParticles(new BlockParticleOption(ParticleTypes.BLOCK, state), count, dx, dy, dz, speed);
+    }
+
+    /*
+     * Custom particles
+     */
+    public static void repairIronGolem(@Nonnull Location location) {
+        location.displayParticles(ParticleTypes.WAX_OFF, 15, 0.5, 0.8, 0.5, 0.1);
+    }
+
+    /**
+     * 厨房炊烟：从烟囱/灶台位置持续升起的暖色炊烟。
+     * <p>
+     * 由 {@code ChimneyBlockEntity} 与 {@code CookMealBehavior} 调用，表现「做饭时厨房升起炊烟」。
+     *
+     * @param location 冒烟起点（通常为烟囱顶部或灶台上方）
+     * @param strength 浓度系数（0~1），控制每 tick 喷出粒子数
+     */
+    public static void cookingSmoke(@Nonnull Location location, double strength) {
+        int count = Math.max(1, (int) Math.round(2.0 * strength));
+        // 暖色营火炊烟，竖直上升、轻微横向扩散
+        location.displayParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, count, 0.25D, 0.6D, 0.25D, 0.04D);
+        // 少量白色烟柱，增强「炊烟」观感
+        location.displayParticles(ParticleTypes.SMOKE, 1, 0.18D, 0.5D, 0.18D, 0.03D);
+    }
+
+    public static void summonIronGolem(@Nonnull Location location) {
+        location.displayParticles(ParticleTypes.WAX_OFF, 40, 0.5, 0.7, 0.5, 0.1);
+    }
+
+    public static void breedHearts(@Nonnull Location location) {
+        location.displayParticles(ParticleTypes.HEART, 5, 0.4, 0.4, 0.4, 1);
+    }
+
+    public static void breedItemConsume(@Nonnull Location location, @Nonnull ItemStack item) {
+        itemBreak(location, item, 20, 0.3, 0.3, 0.3, 0.0D);
+    }
+
+    public static void featherPoof(@Nonnull Location location) {
+        itemBreak(location, new ItemStack(Items.FEATHER), 18, 0.35, 0.35, 0.35, 0.02D);
+    }
+
+    public static void cutBlock(@Nonnull Location location, @Nonnull BlockState state) {
+        blockCrack(location, state, 3, 0.4, 0.4, 0.4, 0.0D);
+    }
+
+    public static void digBlockCrack(@Nonnull Location location, @Nonnull BlockState state) {
+        blockCrack(location, state, 6, 0.35, 0.15, 0.35, 0.0D);
+    }
+
+    public static void harvestBlock(@Nonnull Location location, @Nonnull BlockState state) {
+        blockCrack(location, state, 24, 0.35, 0.35, 0.35, 0.0D);
+    }
+
+    public static void oreRecharge(@Nonnull Location location, @Nonnull BlockState rechargedOre) {
+        blockCrack(location, rechargedOre, 15, 0.4, 0.4, 0.4, 0.05D);
+    }
+
+    public static <T extends ParticleOptions> void displayCircle(@Nonnull T particleType,
+                                                                 @Nonnull Location center,
+                                                                 double radius,
+                                                                 int sampleCount) {
+        if (radius < 0 || sampleCount <= 0) {
+            return;
+        }
+
+        for (int i = 0; i < sampleCount; i++) {
+            double angle = (Math.PI * 2 * i) / sampleCount;
+            double x = center.getX() + radius * Math.cos(angle);
+            double z = center.getZ() + radius * Math.sin(angle);
+
+            Location.of(x, center.getY(), z, center.getLevel().orElse(null))
+                    .displayParticles(particleType, 1, 0, 0, 0, 0);
+        }
+    }
+
+    /**
+     * Emits a single ascending, tier-colored aura orb rising straight up from {@code base}.
+     */
+    public static void enchantTierOrbs(@Nonnull Location base, @Nonnull EnchantTier tier) {
+        double horizontalSpread = 1.0;
+        double velocity = tier.getRiseVelocity();
+
+        OrbParticleOptions orb = new OrbParticleOptions(tier.getPackedRgb(), OrbParticleOptions.MotionMode.RISE);
+        double x = base.getX() + RandomUtil.randomDouble(-horizontalSpread, horizontalSpread);
+        double z = base.getZ() + RandomUtil.randomDouble(-horizontalSpread, horizontalSpread);
+
+        Location.of(x, base.getY(), z, base.getLevel().orElse(null)).displayParticles(orb, 0, 0.0D, 1.0D, 0.0D, velocity);
+    }
+
+}

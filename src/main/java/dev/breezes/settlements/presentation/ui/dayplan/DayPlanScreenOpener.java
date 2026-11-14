@@ -1,0 +1,20 @@
+package dev.breezes.settlements.presentation.ui.dayplan;
+
+import dev.breezes.settlements.application.ui.sync.UiScreenOpener;
+import dev.breezes.settlements.presentation.ui.sync.UiClientState;
+import jakarta.inject.Inject;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import net.minecraft.client.Minecraft;
+
+@AllArgsConstructor(access = AccessLevel.PACKAGE, onConstructor_ = @Inject)
+public final class DayPlanScreenOpener implements UiScreenOpener {
+
+    private final UiClientState uiClientState;
+
+    @Override
+    public void openScreen(long sessionId, int villagerEntityId) {
+        Minecraft.getInstance().setScreen(new DayPlanScreen(sessionId, this.uiClientState));
+    }
+
+}

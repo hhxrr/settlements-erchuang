@@ -1,0 +1,7 @@
+{
+  "biome": "minecraft:grove",
+  "resource_densities": {
+    "LUMBER": 0.6,
+    "FROZEN": 0.5
+  }
+}

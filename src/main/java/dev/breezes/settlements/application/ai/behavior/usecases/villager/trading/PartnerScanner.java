@@ -1,0 +1,187 @@
+package dev.breezes.settlements.application.ai.behavior.usecases.villager.trading;
+
+import dev.breezes.settlements.application.ai.trading.TradeSessionRegistry;
+import dev.breezes.settlements.application.economy.VillagerWallet;
+import dev.breezes.settlements.application.economy.catalog.TradePriceResolver;
+import dev.breezes.settlements.application.economy.demand.ActiveDemand;
+import dev.breezes.settlements.application.economy.demand.DemandEvaluator;
+import dev.breezes.settlements.di.ServerScope;
+import dev.breezes.settlements.domain.ai.memory.MemoryTypeRegistry;
+import dev.breezes.settlements.domain.ai.perception.PerceivedEntities;
+import dev.breezes.settlements.domain.economy.catalog.ItemMatch;
+import dev.breezes.settlements.domain.economy.catalog.ItemMatches;
+import dev.breezes.settlements.domain.economy.catalog.OfferEntry;
+import dev.breezes.settlements.domain.economy.catalog.TradeCatalogRegistry;
+import dev.breezes.settlements.domain.entities.VillagerProfessionKey;
+import dev.breezes.settlements.domain.inventory.BackpackEntry;
+import dev.breezes.settlements.domain.inventory.VillagerInventory;
+import dev.breezes.settlements.infrastructure.minecraft.entities.villager.BaseVillager;
+import jakarta.inject.Inject;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.CustomLog;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Optional;
+
+@ServerScope
+@AllArgsConstructor(access = AccessLevel.PACKAGE, onConstructor_ = @Inject)
+@CustomLog(topic = "behavior")
+public final class PartnerScanner {
+
+    private final TradeCatalogRegistry tradeCatalogRegistry;
+    private final TradePriceResolver tradePriceResolver;
+    private final VillagerWallet villagerWallet;
+    private final TradeSessionRegistry sessionRegistry;
+    private final DemandEvaluator demandEvaluator;
+
+    /**
+     * Finds a perceived villager the buyer could open a trade with now, trying the buyer's demands in priority order.
+     *
+     * @return empty when the buyer is already in a trade session, holds no emeralds, wants nothing, or perceives no
+     * villager selling what it wants at a price it can offer
+     */
+    public Optional<TradeCandidate> findPartner(@Nonnull BaseVillager buyer) {
+        List<ActiveDemand> activeDemands = this.resolveBuyableDemands(buyer);
+        if (activeDemands.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Perception already excludes the buyer itself and bounds range; only tradeability matters here
+        List<BaseVillager> candidates = this.getPerceivedEntities(buyer)
+                .ofType(BaseVillager.class, candidate -> candidate != buyer && candidate.isTradeAvailable())
+                .toList();
+
+        for (ActiveDemand activeDemand : activeDemands) {
+            for (BaseVillager seller : candidates) {
+                Optional<TradeCandidate> candidate = this.matchCandidate(buyer, seller, activeDemand);
+                if (candidate.isPresent()) {
+                    return candidate;
+                }
+            }
+        }
+
+        log.trace("Trade partner search found no seller for villager {} across {} active demands", buyer.getUUID(),
+                activeDemands.size());
+        return Optional.empty();
+    }
+
+    /**
+     * Matches one villager as the buyer's trade partner now, trying the buyer's demands in priority order.
+     *
+     * @return empty when the seller is no longer available to trade, or when the buyer is already in a trade session,
+     * holds no emeralds, or wants nothing the seller sells at a price it can offer
+     */
+    public Optional<TradeCandidate> matchPartner(@Nonnull BaseVillager buyer, @Nonnull BaseVillager seller) {
+        if (seller == buyer || !seller.isTradeAvailable()) {
+            return Optional.empty();
+        }
+
+        for (ActiveDemand activeDemand : this.resolveBuyableDemands(buyer)) {
+            Optional<TradeCandidate> candidate = this.matchCandidate(buyer, seller, activeDemand);
+            if (candidate.isPresent()) {
+                return candidate;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The buyer's active demands in priority order, or an empty list when the buyer cannot open a trade now.
+     */
+    private List<ActiveDemand> resolveBuyableDemands(@Nonnull BaseVillager buyer) {
+        if (this.sessionRegistry.getActiveSession(buyer.getUUID()).isPresent()) {
+            log.trace("Trade partner search skipped: villager {} already has an active session", buyer.getUUID());
+            return List.of();
+        }
+        if (this.villagerWallet.getBalance(buyer) <= 0) {
+            log.trace("Trade partner search skipped: villager {} has no emerald balance", buyer.getUUID());
+            return List.of();
+        }
+
+        List<ActiveDemand> activeDemands = this.demandEvaluator.resolve(buyer);
+        if (activeDemands.isEmpty()) {
+            log.trace("Trade partner search skipped: villager {} has no active demands", buyer.getUUID());
+        }
+        return activeDemands;
+    }
+
+    private PerceivedEntities getPerceivedEntities(@Nonnull BaseVillager villager) {
+        return villager.getSettlementsBrain()
+                .getMemory(MemoryTypeRegistry.NEARBY_SENSED_ENTITIES)
+                .orElse(PerceivedEntities.empty());
+    }
+
+    private Optional<TradeCandidate> matchCandidate(@Nonnull BaseVillager buyer,
+                                                    @Nonnull BaseVillager seller,
+                                                    @Nonnull ActiveDemand activeDemand) {
+        VillagerProfessionKey sellerProfession = seller.getProfession();
+        VillagerInventory sellerInventory = seller.getSettlementsInventory();
+        int buyerBalance = this.villagerWallet.getBalance(buyer);
+
+        List<OfferEntry> offers = this.tradeCatalogRegistry.findOffers(sellerProfession, activeDemand.match());
+        if (offers.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<BackpackEntry> sellerEntries = sellerInventory.entries();
+        for (OfferEntry offerEntry : offers) {
+            for (BackpackEntry entry : sellerEntries) {
+                ItemStack stack = entry.representative();
+                if (!ItemMatches.test(activeDemand.match(), stack) || !ItemMatches.test(offerEntry.match(), stack)) {
+                    continue;
+                }
+
+                Item matchedItem = stack.getItem();
+                // A sale hands over a whole bundle, so the seller must still hold its surplus threshold after it
+                int sellerCount = sellerInventory.count(matchedItem);
+                if (sellerCount - offerEntry.bundleSize() < offerEntry.surplusThreshold()) {
+                    continue;
+                }
+
+                ItemMatch priceMatch = new ItemMatch.ItemRef(BuiltInRegistries.ITEM.getKey(matchedItem));
+
+                // Price resolution is anchored to the concrete stack selected from the seller inventory.
+                // This keeps cross-kind want matching (#tag vs item) from drifting during pricing.
+                int sellerAsk = this.tradePriceResolver.resolveOfferBundlePrice(seller, priceMatch)
+                        .orElse(-1);
+                int buyerOffer = Math.min(activeDemand.basePricePerUnit() * offerEntry.bundleSize(), buyerBalance);
+                if (sellerAsk <= 0) {
+                    continue;
+                }
+                if (buyerOffer <= 0) {
+                    continue;
+                }
+
+                log.trace("Matched trade candidate: buyer={}, seller={}, item={}, want={}, sellerAsk={}, buyerOffer={}, bundleSize={}",
+                        buyer.getUUID(), seller.getUUID(), matchedItem, activeDemand.match(),
+                        sellerAsk, buyerOffer, offerEntry.bundleSize());
+                return Optional.of(TradeCandidate.builder()
+                        .partner(seller)
+                        .activeDemand(activeDemand)
+                        .matchedItem(matchedItem)
+                        .offerEntry(offerEntry)
+                        .buyerOffer(buyerOffer)
+                        .sellerAsk(sellerAsk)
+                        .build());
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    @Builder
+    public record TradeCandidate(BaseVillager partner,
+                                 ActiveDemand activeDemand,
+                                 Item matchedItem,
+                                 OfferEntry offerEntry,
+                                 int buyerOffer,
+                                 int sellerAsk) {
+    }
+
+}
