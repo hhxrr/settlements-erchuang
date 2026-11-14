@@ -11,7 +11,7 @@
 | 主要依赖 | Create（机械动力，必需）、Create: Aeronautics、Valkyrien Skies 2（可选） |
 | 代码协议 | **GPL-3.0**（沿用上游，见 [LICENSE](LICENSE)） |
 | 素材协议 | CC BY 4.0（见 [LICENSE-ASSETS](LICENSE-ASSETS)） |
-| 成品下载 | **Releases → `万家烟火3.0.zip`**（整合包 + 实测视频 + 截图 + 文档） |
+| 成品下载 | **Releases → `WanJiaYanHuo-3.0.zip`**（即「万家烟火3.0」整合包 + 实测视频 + 截图 + 文档） |
 
 ---
 
@@ -37,7 +37,7 @@
 
 ### 方式 A：直接玩整合包（推荐）
 
-去 [Releases](https://github.com/hhxrr/settlements-erchuang/releases) 下载 **`万家烟火3.0.zip`**，内含：
+去 [Releases](https://github.com/hhxrr/settlements-erchuang/releases) 下载 **`WanJiaYanHuo-3.0.zip`**（中文名「万家烟火 3.0」，因 GitHub Release 资产名不支持中文故用拼音；解压后顶层目录为 `万家烟火3.0/`），内含：
 
 - `mods/` —— 实测通过的 Mod 组合与本二创 jar
 - `实测视频/` —— 8 段实录（含 `07_贴地三合院_天花板_真实材质_村民逐格搭建.mp4`）
